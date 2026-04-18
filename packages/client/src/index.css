@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: #0f0e0d;
+    color: #e2d9c8;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1a1916;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #413d38;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #5a5450;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-dungeon-800 border border-dungeon-600 rounded-lg;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 bg-parchment-400 hover:bg-parchment-300 text-dungeon-900 font-semibold rounded-md
+           transition-colors duration-150 text-sm cursor-pointer;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-dungeon-600 hover:bg-dungeon-500 text-parchment-100 font-semibold rounded-md
+           transition-colors duration-150 text-sm cursor-pointer border border-dungeon-500;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md
+           transition-colors duration-150 text-sm cursor-pointer;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 bg-dungeon-700 border border-dungeon-500 rounded-md text-parchment-100
+           text-sm focus:outline-none focus:border-parchment-400 placeholder-dungeon-400
+           transition-colors duration-150;
+  }
+
+  .label {
+    @apply text-xs font-medium text-parchment-300 uppercase tracking-wider;
+  }
+
+  .fantasy-heading {
+    @apply font-fantasy text-parchment-200;
+  }
+}
+
+/* Pixi canvas host */
+#game-canvas-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+#game-canvas-container canvas {
+  display: block;
+}
+
+/* Ping animation */
+@keyframes ping-expand {
+  0% { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.map-ping {
+  animation: ping-expand 1.2s ease-out forwards;
+}
+
+/* Dice roll glow on nat 20 */
+@keyframes nat20 {
+  0%, 100% { box-shadow: 0 0 8px #facc15; }
+  50% { box-shadow: 0 0 20px #facc15, 0 0 40px #facc15; }
+}
+
+.nat20-glow {
+  animation: nat20 0.8s ease-in-out 3;
+}

@@ -1,0 +1,128 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  avatarColor  String   @default("#60a5fa")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedCampaigns Campaign[]    @relation("CampaignOwner")
+  characters     Character[]
+  sessionUsers   SessionUser[]
+  chatMessages   ChatMessage[]
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User     @relation("CampaignOwner", fields: [ownerId], references: [id])
+  inviteCode  String   @unique @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sessions   Session[]
+  maps       Map[]
+  characters Character[]
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String
+  // Full GameState JSON persisted on save
+  state      Json?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users    SessionUser[]
+  messages ChatMessage[]
+}
+
+model SessionUser {
+  id          String  @id @default(cuid())
+  sessionId   String
+  session     Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+  role        String  // 'dm' | 'player' | 'observer'
+  characterId String?
+
+  @@unique([sessionId, userId])
+}
+
+model Character {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  campaignId      String
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name            String
+  class           String?
+  race            String?
+  level           Int      @default(1)
+  hp              Int      @default(10)
+  maxHp           Int      @default(10)
+  ac              Int      @default(10)
+  speed           Int      @default(30)
+  initiativeBonus Int      @default(0)
+  strength        Int      @default(10)
+  dexterity       Int      @default(10)
+  constitution    Int      @default(10)
+  intelligence    Int      @default(10)
+  wisdom          Int      @default(10)
+  charisma        Int      @default(10)
+  notes           String?
+  spells          Json?
+  inventory       Json?
+  imageUrl        String?
+  tokenColor      String   @default("#60a5fa")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Map {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name        String
+  gridWidth   Int      @default(30)
+  gridHeight  Int      @default(20)
+  cellSize    Int      @default(40)
+  imageUrl    String?
+  terrain     Json?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ChatMessage {
+  id           String   @id @default(cuid())
+  sessionId    String
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  userName     String
+  userColor    String
+  content      String
+  type         String   // 'chat' | 'roll' | 'system' | 'emote' | 'whisper'
+  rollData     Json?
+  isPrivate    Boolean  @default(false)
+  targetUserId String?
+  createdAt    DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+}
