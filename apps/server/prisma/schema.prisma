@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String      @id @default(cuid())
+  email          String      @unique
+  passwordHash   String?
+  displayName    String
+  createdAt      DateTime    @default(now())
+  characters     Character[]
+  memberships    RoomMember[]
+  sentMessages   Message[]
+  diceRolls      DiceRoll[]
+}
+
+model Campaign {
+  id          String    @id @default(cuid())
+  name        String
+  ownerUserId String
+  owner       User      @relation(fields: [ownerUserId], references: [id])
+  sessions    Session[]
+  createdAt   DateTime  @default(now())
+}
+
+model Session {
+  id            String    @id @default(cuid())
+  campaignId    String
+  campaign      Campaign  @relation(fields: [campaignId], references: [id])
+  room          Room?
+  name          String
+  status        String    @default("draft")
+  snapshotJson  Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Room {
+  id               String       @id @default(cuid())
+  code             String       @unique
+  sessionId        String       @unique
+  session          Session      @relation(fields: [sessionId], references: [id])
+  activeMapId      String?
+  activeMap        MapAsset?    @relation(fields: [activeMapId], references: [id])
+  movementLocked   Boolean      @default(false)
+  fogMaskJson      Json?
+  initiativeJson   Json?
+  members          RoomMember[]
+  tokens           Token[]
+  messages         Message[]
+  diceRolls        DiceRoll[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model RoomMember {
+  id           String   @id @default(cuid())
+  roomId        String
+  room          Room     @relation(fields: [roomId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  role          String
+  isOnline      Boolean  @default(false)
+  joinedAt      DateTime @default(now())
+
+  @@unique([roomId, userId])
+}
+
+model Character {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  campaignId     String?
+  name           String
+  className      String?
+  level          Int      @default(1)
+  hp             Int      @default(10)
+  maxHp          Int      @default(10)
+  armorClass     Int      @default(10)
+  speed          Int      @default(30)
+  initiativeBonus Int     @default(0)
+  statsJson      Json?
+  inventoryNotes String?
+  spellNotes     String?
+  token          Token?
+}
+
+model Token {
+  id            String   @id @default(cuid())
+  roomId        String
+  room          Room     @relation(fields: [roomId], references: [id])
+  characterId   String?  @unique
+  character     Character? @relation(fields: [characterId], references: [id])
+  type          String
+  label         String
+  ownerUserId   String?
+  x             Int
+  y             Int
+  size          Int      @default(1)
+  hp            Int      @default(1)
+  maxHp         Int      @default(1)
+  statusJson    Json?
+  hidden        Boolean  @default(false)
+}
+
+model MapAsset {
+  id          String   @id @default(cuid())
+  name        String
+  imageUrl    String
+  width       Int
+  height      Int
+  gridSize    Int      @default(64)
+  metadataJson Json?
+  rooms       Room[]
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  roomId       String
+  room         Room     @relation(fields: [roomId], references: [id])
+  senderUserId String?
+  sender       User?    @relation(fields: [senderUserId], references: [id])
+  channel      String   @default("public")
+  body         String
+  kind         String   @default("chat")
+  createdAt    DateTime @default(now())
+}
+
+model DiceRoll {
+  id           String   @id @default(cuid())
+  roomId        String
+  room          Room     @relation(fields: [roomId], references: [id])
+  rollerUserId  String
+  roller        User     @relation(fields: [rollerUserId], references: [id])
+  formula       String
+  total         Int
+  detailJson    Json
+  visibility    String   @default("public")
+  createdAt     DateTime @default(now())
+}
