@@ -7,12 +7,14 @@ import type {
   RoomUser,
   Vec2,
   FogState,
+  MapData,
 } from '@dnd/shared';
 
 interface GameStore {
   // Connection state
   connected: boolean;
   sessionId: string | null;
+  campaignId: string | null;
   myUserId: string | null;
   myRole: 'dm' | 'player' | 'observer' | null;
 
@@ -21,6 +23,9 @@ interface GameStore {
 
   // Core game state
   gameState: GameState | null;
+
+  // Active map (full data including imageUrl)
+  currentMap: MapData | null;
 
   // Chat
   messages: ChatMessage[];
@@ -32,6 +37,8 @@ interface GameStore {
   // Actions — called by socket event handlers and UI
   setConnected: (connected: boolean) => void;
   initSession: (sessionId: string, userId: string, role: 'dm' | 'player' | 'observer') => void;
+  setCampaignId: (id: string) => void;
+  setCurrentMap: (map: MapData | null) => void;
   setGameState: (state: GameState) => void;
 
   // User presence
@@ -69,10 +76,12 @@ interface GameStore {
 export const useGameStore = create<GameStore>((set, get) => ({
   connected: false,
   sessionId: null,
+  campaignId: null,
   myUserId: null,
   myRole: null,
   roomUsers: [],
   gameState: null,
+  currentMap: null,
   messages: [],
   selectedTokenId: null,
   pingMarkers: [],
@@ -81,6 +90,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   initSession: (sessionId, myUserId, myRole) =>
     set({ sessionId, myUserId, myRole }),
+
+  setCampaignId: (id) => set({ campaignId: id }),
+
+  setCurrentMap: (map) => set({ currentMap: map }),
 
   setGameState: (state) => set({ gameState: state }),
 

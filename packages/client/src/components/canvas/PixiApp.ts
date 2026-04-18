@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import type { GameState, Vec2 } from '@dnd/shared';
+import type { GameState, MapData, Vec2 } from '@dnd/shared';
 import { GRID_CELL_SIZE } from '@dnd/shared';
 import { MapLayer } from './layers/MapLayer';
 import { GridLayer } from './layers/GridLayer';
@@ -178,6 +178,35 @@ export class PixiApp {
   syncGameState(state: GameState): void {
     this.tokenLayer.syncTokens(Object.values(state.tokens), this.cellSize);
     this.fogLayer.syncFog(state.fog, this.gridWidth, this.gridHeight, this.cellSize);
+  }
+
+  /**
+   * Called whenever the active map changes (new upload or DM switches map).
+   * Redraws the map layer and resizes the grid to match the new map's dimensions.
+   */
+  async loadMap(map: MapData): Promise<void> {
+    this.gridWidth = map.gridWidth;
+    this.gridHeight = map.gridHeight;
+    this.cellSize = map.cellSize;
+
+    const widthPx = map.gridWidth * map.cellSize;
+    const heightPx = map.gridHeight * map.cellSize;
+
+    if (map.imageUrl) {
+      // Build the absolute URL — in dev the Vite proxy forwards /uploads to the server
+      const imageUrl = map.imageUrl.startsWith('http')
+        ? map.imageUrl
+        : map.imageUrl; // relative URLs work fine via the proxy
+      await this.mapLayer.loadImage(imageUrl, widthPx, heightPx);
+    } else {
+      this.mapLayer.clearImage();
+      drawCampsiteMap(this.mapLayer, map.gridWidth, map.gridHeight, map.cellSize);
+    }
+
+    this.gridLayer.draw(map.gridWidth, map.gridHeight, map.cellSize);
+    this.fogLayer.syncFog({ revealed: {} }, map.gridWidth, map.gridHeight, map.cellSize);
+    this.tokenLayer.syncTokens([], map.cellSize);
+    this.centerViewport();
   }
 
   setSelectedToken(tokenId: string | null): void {

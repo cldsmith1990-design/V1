@@ -3,11 +3,13 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
+import path from 'path';
 import { config } from './config';
 import { authRouter } from './routes/auth';
 import { campaignsRouter } from './routes/campaigns';
 import { charactersRouter } from './routes/characters';
 import { mapsRouter } from './routes/maps';
+import { uploadsRouter, UPLOADS_DIR } from './routes/uploads';
 import { setupSocketHandlers } from './socket';
 
 const app = express();
@@ -38,11 +40,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Static file serving for uploaded map images ───────────────────────────────
+app.use('/uploads', express.static(UPLOADS_DIR, {
+  maxAge: '7d',
+  immutable: false,
+}));
+
 // ── REST Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/characters', charactersRouter);
 app.use('/api/maps', mapsRouter);
+app.use('/api/uploads', uploadsRouter);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
 

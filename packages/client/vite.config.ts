@@ -21,6 +21,11 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      // Proxy uploaded map images in dev
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 });

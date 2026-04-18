@@ -106,8 +106,16 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
       take: 50,
     });
 
+    // Load active map data if one is set
+    let activeMap = null;
+    if (room.gameState.activeMapId) {
+      activeMap = await prisma.map.findUnique({ where: { id: room.gameState.activeMapId } });
+    }
+
     socket.emit('room:joined', {
       state: room.gameState,
+      campaignId: dbSession.campaignId,
+      activeMap,
       users: roomManager.getRoomUsers(sessionId).map(({ socketId: _s, ...u }) => u),
       messages: recentMessages.reverse().map((m) => ({
         id: m.id,
@@ -214,6 +222,40 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
       userName: 'System',
       userColor: '#94a3b8',
       content: 'Session state saved.',
+      type: 'system',
+      timestamp: Date.now(),
+    });
+  });
+
+  // ── session:setMap ────────────────────────────────────────────────────────
+  socket.on('session:setMap', async ({ mapId }: { mapId: string }) => {
+    const found = roomManager.getUserRoom(socket.id);
+    if (!found) return;
+    const { sessionId, userId } = found;
+    if (!roomManager.isDM(sessionId, userId)) return;
+
+    const map = await prisma.map.findUnique({ where: { id: mapId } });
+    if (!map) {
+      socket.emit('error', { message: 'Map not found' });
+      return;
+    }
+
+    roomManager.updateGameState(sessionId, (s) => ({
+      ...s,
+      activeMapId: mapId,
+      // Clear token positions and fog when switching maps
+      tokens: {},
+      fog: { revealed: {} },
+    }));
+
+    io.to(sessionId).emit('session:mapChanged', { map });
+    io.to(sessionId).emit('chat:message', {
+      id: `sys-${Date.now()}`,
+      sessionId,
+      userId: 'system',
+      userName: 'System',
+      userColor: '#94a3b8',
+      content: `Map switched to "${map.name}"`,
       type: 'system',
       timestamp: Date.now(),
     });

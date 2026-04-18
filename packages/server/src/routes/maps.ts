@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../db/client';
 import { authMiddleware } from '../middleware/auth';
+import { UPLOADS_DIR } from './uploads';
 
 export const mapsRouter = Router();
 mapsRouter.use(authMiddleware);
@@ -45,4 +48,23 @@ mapsRouter.get('/:id', async (req, res) => {
   const map = await prisma.map.findUnique({ where: { id: req.params.id } });
   if (!map) return res.status(404).json({ error: 'Not found' });
   return res.json({ map });
+});
+
+mapsRouter.delete('/:id', async (req, res) => {
+  const map = await prisma.map.findUnique({ where: { id: req.params.id } });
+  if (!map) return res.status(404).json({ error: 'Not found' });
+
+  const campaign = await prisma.campaign.findUnique({ where: { id: map.campaignId } });
+  if (campaign?.ownerId !== req.user!.userId) {
+    return res.status(403).json({ error: 'Only the DM can delete maps' });
+  }
+
+  // Clean up image file if present
+  if (map.imageUrl) {
+    const filePath = path.join(UPLOADS_DIR, path.basename(map.imageUrl));
+    fs.unlink(filePath, () => {});
+  }
+
+  await prisma.map.delete({ where: { id: req.params.id } });
+  return res.json({ ok: true });
 });

@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/useGameStore';
 import { useAuthStore } from '../store/useAuthStore';
-import type { ChatMessage, Token, RoomUser, EncounterState, GameState, Vec2 } from '@dnd/shared';
+import type { ChatMessage, Token, RoomUser, EncounterState, GameState, Vec2, MapData } from '@dnd/shared';
 
 let socket: Socket | null = null;
 
@@ -44,8 +44,16 @@ export function initSocket(): Socket {
   // ── Room events ───────────────────────────────────────────────────────────
   socket.on(
     'room:joined',
-    (payload: { state: GameState; users: RoomUser[]; messages: ChatMessage[] }) => {
+    (payload: {
+      state: GameState;
+      campaignId: string;
+      activeMap: MapData | null;
+      users: RoomUser[];
+      messages: ChatMessage[];
+    }) => {
       store.setGameState(payload.state);
+      store.setCampaignId(payload.campaignId);
+      store.setCurrentMap(payload.activeMap);
       store.setRoomUsers(payload.users);
       store.setMessages(payload.messages);
     }
@@ -107,6 +115,17 @@ export function initSocket(): Socket {
   // ── Session ───────────────────────────────────────────────────────────────
   socket.on('session:movementLocked', ({ locked }: { locked: boolean }) => {
     store.setMovementLocked(locked);
+  });
+
+  socket.on('session:mapChanged', ({ map }: { map: MapData }) => {
+    store.setCurrentMap(map);
+    // Clear tokens and fog (server already did this on its side)
+    store.setGameState({
+      ...useGameStore.getState().gameState!,
+      tokens: {},
+      fog: { revealed: {} },
+      activeMapId: map.id,
+    });
   });
 
   socket.on('error', ({ message }: { message: string }) => {
@@ -171,4 +190,8 @@ export function emitSaveState(): void {
 
 export function emitLockMovement(locked: boolean): void {
   getSocket().emit('session:lockMovement', { locked });
+}
+
+export function emitSetMap(mapId: string): void {
+  getSocket().emit('session:setMap', { mapId });
 }

@@ -12,8 +12,9 @@ import type { Token, TokenType } from '@dnd/shared';
 import { PLAYER_COLORS } from '@dnd/shared';
 import TokenCreator from './TokenCreator';
 import FogControls from './FogControls';
+import MapManager from './MapManager';
 
-type DMTab = 'tokens' | 'fog' | 'session';
+type DMTab = 'tokens' | 'maps' | 'fog' | 'session';
 
 export default function DMPanel() {
   const [tab, setTab] = useState<DMTab>('tokens');
@@ -26,6 +27,7 @@ export default function DMPanel() {
       <div className="flex border-b border-dungeon-700 bg-dungeon-900/30">
         {([
           { id: 'tokens', label: 'Tokens' },
+          { id: 'maps', label: 'Maps' },
           { id: 'fog', label: 'Fog' },
           { id: 'session', label: 'Session' },
         ] as { id: DMTab; label: string }[]).map((t) => (
@@ -45,6 +47,7 @@ export default function DMPanel() {
 
       <div className="flex-1 overflow-y-auto">
         {tab === 'tokens' && <TokensTab />}
+        {tab === 'maps' && <MapManager />}
         {tab === 'fog' && <FogControls />}
         {tab === 'session' && (
           <SessionTab lockedMovement={lockedMovement} />
