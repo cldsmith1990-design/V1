@@ -4,16 +4,29 @@
   var root = document.getElementById("root");
   var state = {
     activeCategory: "all",
-    activeChild: "all"
+    activeKid: "all",
+    selectedItemId: null
   };
 
-  var DEFAULT_CATEGORIES = [
-    { id: "school", label: "School", visible: true },
-    { id: "dance", label: "Dance", visible: true },
-    { id: "theater", label: "Theater", visible: true },
-    { id: "sports", label: "Sports", visible: true },
-    { id: "family", label: "Family", visible: true }
+  var VISUAL_CATEGORIES = [
+    { id: "all", label: "All" },
+    { id: "school", label: "School" },
+    { id: "dance", label: "Dance" },
+    { id: "theater", label: "Theater" },
+    { id: "sports", label: "Sports" },
+    { id: "calendar", label: "Calendar" },
+    { id: "family", label: "Family" }
   ];
+
+  var CATEGORY_ACCENTS = {
+    school: "mint",
+    dance: "violet",
+    theater: "rose",
+    sports: "sky",
+    calendar: "amber",
+    family: "gold",
+    other: "slate"
+  };
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -24,293 +37,517 @@
       .replace(/'/g, "&#039;");
   }
 
-  function formatDate(dateValue) {
-    if (!dateValue) return "No date listed";
-    var parts = String(dateValue).split("-");
-    if (parts.length !== 3) return escapeHtml(dateValue);
-    var date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    if (Number.isNaN(date.getTime())) return escapeHtml(dateValue);
-    return date.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric"
-    });
+  function slug(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "item";
   }
 
-  function formatTime(item) {
+  function titleCase(value) {
+    return String(value || "")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, function (letter) { return letter.toUpperCase(); });
+  }
+
+  function parseLocalDate(dateValue) {
+    if (!dateValue) return null;
+    var parts = String(dateValue).split("-");
+    if (parts.length !== 3) return null;
+    var date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function formatDate(dateValue, fallback) {
+    if (!dateValue) return fallback || "No date listed";
+    var date = parseLocalDate(dateValue);
+    if (!date) return String(dateValue);
+    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+
+  function formatLongDate(dateValue) {
+    if (!dateValue) return "No date listed";
+    var date = parseLocalDate(dateValue);
+    if (!date) return String(dateValue);
+    return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  }
+
+  function formatTimeRange(item) {
     if (item.allDay) return "All day";
     if (!item.startTime && !item.endTime) return "Time not listed";
     if (item.startTime && item.endTime) return item.startTime + "–" + item.endTime;
     return item.startTime || item.endTime;
   }
 
-  function normalizeData(rawData) {
+  function toSortDate(item) {
+    if (!item.date) return "9999-12-31T99:99";
+    return String(item.date) + "T" + String(item.startTime || "23:59");
+  }
+
+  function daysUntil(dateValue) {
+    var date = parseLocalDate(dateValue);
+    if (!date) return null;
+    var today = new Date();
+    var start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return Math.round((date.getTime() - start.getTime()) / 86400000);
+  }
+
+  // ChatGPT generates dashboard-data.js. The app reads that global file and adapts it
+  // into the restored Family Desk visual model without mutating the loaded object.
+  function getManualDashboardData() {
+    return window.DASHBOARD_DATA;
+  }
+
+  function validateDashboardData(rawData) {
     if (!rawData || typeof rawData !== "object") {
-      return { error: "dashboard-data.js was not found or did not define window.DASHBOARD_DATA. Replace dashboard-data.js and refresh." };
+      return {
+        ok: false,
+        code: "missing-data",
+        message: "dashboard-data.js is missing or did not define window.DASHBOARD_DATA. Replace dashboard-data.js and refresh this browser tab."
+      };
     }
 
     if (!Array.isArray(rawData.items)) {
-      return { error: "The data file format is invalid: window.DASHBOARD_DATA.items must be an array. Replace dashboard-data.js and refresh." };
+      return {
+        ok: false,
+        code: "invalid-items",
+        message: "dashboard-data.js loaded, but window.DASHBOARD_DATA.items is missing or is not an array. Replace dashboard-data.js and refresh this browser tab."
+      };
     }
 
-    var children = Array.isArray(rawData.children) ? rawData.children : [];
-    var categories = Array.isArray(rawData.categories) && rawData.categories.length ? rawData.categories : DEFAULT_CATEGORIES;
-    var activeChildrenById = children.reduce(function (lookup, child) {
-      if (child && child.id) lookup[child.id] = child;
-      return lookup;
-    }, {});
+    return { ok: true };
+  }
 
-    var items = rawData.items.map(function (item, index) {
-      var safeItem = item && typeof item === "object" ? item : {};
-      var childNames = Array.isArray(safeItem.childNames) ? safeItem.childNames.filter(Boolean) : [];
-      if (!childNames.length && Array.isArray(safeItem.childIds)) {
-        childNames = safeItem.childIds.map(function (id) {
-          return activeChildrenById[id] ? activeChildrenById[id].displayName : id;
-        }).filter(Boolean);
-      }
-
-      return {
-        id: safeItem.id || "manual_item_" + index,
-        type: safeItem.type || "item",
-        title: safeItem.title || "Untitled item",
-        category: safeItem.category || "other",
-        childIds: Array.isArray(safeItem.childIds) ? safeItem.childIds : [],
-        childNames: childNames,
-        date: safeItem.date || null,
-        startTime: safeItem.startTime || null,
-        endTime: safeItem.endTime || null,
-        allDay: Boolean(safeItem.allDay),
-        timezone: safeItem.timezone || (rawData.meta && rawData.meta.timezone) || null,
-        location: safeItem.location && typeof safeItem.location === "object" ? safeItem.location : {},
-        source: safeItem.source && typeof safeItem.source === "object" ? safeItem.source : {},
-        actionNeeded: safeItem.actionNeeded && typeof safeItem.actionNeeded === "object" ? safeItem.actionNeeded : { required: false },
-        prepItems: Array.isArray(safeItem.prepItems) ? safeItem.prepItems : [],
-        calendarStatus: safeItem.calendarStatus || "not_checked",
-        priority: safeItem.priority || "normal",
-        reviewStatus: safeItem.reviewStatus || "needs_review",
-        notes: safeItem.notes || "",
-        tags: Array.isArray(safeItem.tags) ? safeItem.tags : []
-      };
-    });
-
+  function createVisibleErrorState(validation) {
     return {
-      meta: rawData.meta || {},
-      children: children,
-      categories: categories,
-      items: sortItems(items, rawData.meta),
-      review: rawData.review || {}
+      error: true,
+      code: validation.code || "data-error",
+      message: validation.message || "dashboard-data.js could not be read. Replace dashboard-data.js and refresh this browser tab."
     };
   }
 
-  function sortItems(items, meta) {
-    var showNeedsReviewFirst = Boolean(meta && meta.dashboardInstructions && meta.dashboardInstructions.showNeedsReviewFirst);
-    return items.slice().sort(function (a, b) {
-      if (showNeedsReviewFirst) {
-        var aNeeds = isFlagged(a) ? 0 : 1;
-        var bNeeds = isFlagged(b) ? 0 : 1;
-        if (aNeeds !== bNeeds) return aNeeds - bNeeds;
+  function adaptManualDataToVisualModel(rawData) {
+    var validation = validateDashboardData(rawData);
+    if (!validation.ok) return createVisibleErrorState(validation);
+
+    var children = Array.isArray(rawData.children) ? rawData.children.map(function (child) {
+      return {
+        id: child && child.id ? String(child.id) : slug(child && child.displayName),
+        label: child && child.displayName ? String(child.displayName) : "Kid",
+        color: child && child.colorKey ? String(child.colorKey) : "gold",
+        active: !(child && child.active === false)
+      };
+    }).filter(function (child) { return child.id; }) : [];
+
+    var childLookup = children.reduce(function (lookup, child) {
+      lookup[child.id] = child;
+      return lookup;
+    }, {});
+
+    var manualCategories = Array.isArray(rawData.categories) ? rawData.categories : [];
+    var categories = VISUAL_CATEGORIES.filter(function (category) {
+      if (category.id === "all") return true;
+      var manualMatch = manualCategories.find(function (manualCategory) { return manualCategory && manualCategory.id === category.id; });
+      return !manualMatch || manualMatch.visible !== false;
+    });
+
+    manualCategories.forEach(function (manualCategory) {
+      if (!manualCategory || manualCategory.visible === false) return;
+      if (!categories.find(function (category) { return category.id === manualCategory.id; })) {
+        categories.push({ id: String(manualCategory.id), label: manualCategory.label || titleCase(manualCategory.id) });
       }
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return String(a.date).localeCompare(String(b.date)) || String(a.startTime || "").localeCompare(String(b.startTime || ""));
+    });
+
+    var items = rawData.items.map(function (item, index) {
+      return adaptManualItemToVisualItem(item, index, childLookup, rawData.meta || {});
+    }).sort(function (a, b) {
+      var aFlag = a.isPriority ? 0 : 1;
+      var bFlag = b.isPriority ? 0 : 1;
+      if (aFlag !== bFlag) return aFlag - bFlag;
+      return a.sortDate.localeCompare(b.sortDate);
+    });
+
+    return {
+      error: false,
+      meta: rawData.meta || {},
+      review: rawData.review || {},
+      kids: [{ id: "all", label: "Family", color: "gold", active: true }].concat(children),
+      categories: categories,
+      items: items,
+      generatedAt: rawData.meta && rawData.meta.generatedAt ? rawData.meta.generatedAt : "Not listed",
+      sourceWindow: rawData.meta && rawData.meta.sourceWindow ? rawData.meta.sourceWindow : null
+    };
+  }
+
+  function adaptManualItemToVisualItem(manualItem, index, childLookup, meta) {
+    var item = manualItem && typeof manualItem === "object" ? manualItem : {};
+    var childIds = Array.isArray(item.childIds) ? item.childIds.map(String) : [];
+    var childNames = Array.isArray(item.childNames) ? item.childNames.filter(Boolean).map(String) : [];
+
+    if (!childNames.length && childIds.length) {
+      childNames = childIds.map(function (id) { return childLookup[id] ? childLookup[id].label : titleCase(id); });
+    }
+
+    var cat = item.category ? String(item.category) : "other";
+    var location = item.location && typeof item.location === "object" ? item.location : {};
+    var source = item.source && typeof item.source === "object" ? item.source : {};
+    var action = item.actionNeeded && typeof item.actionNeeded === "object" ? item.actionNeeded : { required: false };
+    var prepItems = Array.isArray(item.prepItems) ? item.prepItems.map(function (prep) {
+      if (typeof prep === "string") return { label: prep, status: "needed" };
+      return { label: prep && prep.label ? String(prep.label) : "Prep item", status: prep && prep.status ? String(prep.status) : "needed" };
+    }) : [];
+    var notes = item.notes ? String(item.notes) : "";
+    var actionLabel = action.required ? (action.label || "Action needed") : (action.label || "Action not listed");
+    var details = [source.summary, notes, prepItems.map(function (prep) { return prep.label; }).join(", "), action.label]
+      .filter(Boolean).join(" · ") || "Source not listed";
+    var priority = item.priority || "normal";
+    var reviewStatus = item.reviewStatus || "needs_review";
+    var calStatus = item.calendarStatus || "not_checked";
+    var isActionRequired = Boolean(action.required);
+    var isPriority = priority === "urgent" || priority === "high" || isActionRequired || reviewStatus === "needs_review" || calStatus === "needs_review" || calStatus === "not_checked" || source.confidence === "needs_review";
+
+    return {
+      id: item.id || "manual-" + index,
+      type: item.type || "item",
+      title: item.title || "Untitled item",
+      cat: cat,
+      categoryLabel: titleCase(cat),
+      accent: CATEGORY_ACCENTS[cat] || "slate",
+      kidIds: childIds,
+      kid: childNames.length ? childNames.join(", ") : "Family",
+      date: item.date || null,
+      sortDate: toSortDate(item),
+      dateLabel: formatDate(item.date),
+      longDateLabel: formatLongDate(item.date),
+      time: formatTimeRange(item),
+      allDay: Boolean(item.allDay),
+      timezone: item.timezone || meta.timezone || null,
+      location: location.name || location.address || "Location not listed",
+      locationNotes: location.notes || "",
+      summary: source.summary || source.subject || "Source not listed",
+      details: details,
+      from: source.sender || "Source not listed",
+      received: source.receivedAt || "Source not listed",
+      link: source.link || "",
+      actions: actionLabel,
+      actionRequired: isActionRequired,
+      deadline: action.dueDate || "",
+      prep: prepItems,
+      calStatus: calStatus,
+      priority: priority,
+      reviewStatus: reviewStatus,
+      confidence: source.confidence || "not listed",
+      notes: notes,
+      tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
+      daysUntil: daysUntil(item.date),
+      isPriority: isPriority,
+      calendarHref: createCalendarHref(item, location)
+    };
+  }
+
+  function createCalendarHref(item, location) {
+    if (!item || !item.date) return "";
+    var title = item.title || "Family Dashboard item";
+    var text = [item.notes, item.source && item.source.summary].filter(Boolean).join("\n\n");
+    var where = location && (location.name || location.address) ? (location.name || location.address) : "";
+    return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(title) + "&dates=" + encodeURIComponent(String(item.date).replace(/-/g, "")) + "/" + encodeURIComponent(String(item.date).replace(/-/g, "")) + "&details=" + encodeURIComponent(text) + "&location=" + encodeURIComponent(where);
+  }
+
+  function isToday(item) {
+    var remaining = daysUntil(item.date);
+    return remaining === 0;
+  }
+
+  function getVisibleItems(model) {
+    return model.items.filter(function (item) {
+      var categoryMatch = state.activeCategory === "all" || item.cat === state.activeCategory || (state.activeCategory === "calendar" && item.date);
+      var kidMatch = state.activeKid === "all" || item.kidIds.indexOf(state.activeKid) !== -1 || (state.activeKid === "all" && !item.kidIds.length);
+      return categoryMatch && kidMatch;
     });
   }
 
-  function isFlagged(item) {
-    return item.priority === "urgent" ||
-      item.priority === "high" ||
-      item.reviewStatus === "needs_review" ||
-      item.calendarStatus === "needs_review" ||
-      item.calendarStatus === "not_checked" ||
-      (item.actionNeeded && item.actionNeeded.required) ||
-      (item.source && item.source.confidence === "needs_review");
+  function renderBadge(label, value, modifier) {
+    return '<span class="badge ' + escapeHtml(modifier || "") + '"><b>' + escapeHtml(label) + '</b>' + escapeHtml(value || "not listed") + '</span>';
   }
 
-  function categoryLabel(data, categoryId) {
-    var match = data.categories.find(function (category) { return category.id === categoryId; });
-    return match ? match.label : categoryId;
-  }
-
-  function getFilteredItems(data) {
-    return data.items.filter(function (item) {
-      var categoryMatches = state.activeCategory === "all" || item.category === state.activeCategory;
-      var childMatches = state.activeChild === "all" || item.childIds.indexOf(state.activeChild) !== -1;
-      return categoryMatches && childMatches;
-    });
-  }
-
-  function renderError(message) {
+  function renderDataProblem(errorState) {
     root.innerHTML = [
-      '<main class="shell">',
-      '  <section class="error-panel">',
+      '<main class="family-desk error-mode">',
+      '  <section class="data-error-panel glass-panel">',
       '    <p class="eyebrow">Manual file issue</p>',
-      '    <h1>Family Dashboard could not load data</h1>',
-      '    <p>' + escapeHtml(message) + '</p>',
+      '    <h1>Family Desk cannot load dashboard-data.js</h1>',
+      '    <p>' + escapeHtml(errorState.message) + '</p>',
+      '    <div class="repair-steps">',
+      '      <span>1. Replace dashboard-data.js</span>',
+      '      <span>2. Keep window.DASHBOARD_DATA = { ... }</span>',
+      '      <span>3. Refresh this browser tab</span>',
+      '    </div>',
       '  </section>',
       '</main>'
     ].join("");
   }
 
-  function renderBadge(label, value, extraClass) {
-    if (!value && !label) return "";
-    return '<span class="badge ' + escapeHtml(extraClass || "") + '">' + escapeHtml(label ? label + ": " : "") + escapeHtml(value || "unknown") + '</span>';
-  }
-
-  function renderTabs(data) {
-    var visibleCategories = data.categories.filter(function (category) { return category.visible !== false; });
-    var categoryTabs = [{ id: "all", label: "All" }].concat(visibleCategories).map(function (category) {
-      var activeClass = state.activeCategory === category.id ? " active" : "";
-      return '<button class="tab' + activeClass + '" data-category="' + escapeHtml(category.id) + '">' + escapeHtml(category.label) + '</button>';
+  function renderTopNav(model) {
+    var kidButtons = model.kids.filter(function (kid) { return kid.active !== false; }).map(function (kid) {
+      return '<button class="nav-pill kid-' + escapeHtml(kid.color) + (state.activeKid === kid.id ? ' is-active' : '') + '" data-kid="' + escapeHtml(kid.id) + '">' + escapeHtml(kid.label) + '</button>';
     }).join("");
 
-    var childTabs = [{ id: "all", displayName: "All kids" }].concat(data.children.filter(function (child) { return child.active !== false; })).map(function (child) {
-      var activeClass = state.activeChild === child.id ? " active" : "";
-      var colorClass = child.colorKey ? " child-" + child.colorKey : "";
-      return '<button class="tab child-tab' + activeClass + colorClass + '" data-child="' + escapeHtml(child.id) + '">' + escapeHtml(child.displayName) + '</button>';
+    var categoryButtons = model.categories.map(function (category) {
+      return '<button class="chip ' + (state.activeCategory === category.id ? 'is-active' : '') + '" data-category="' + escapeHtml(category.id) + '">' + escapeHtml(category.label) + '</button>';
     }).join("");
 
-    return '<section class="toolbar"><div><p class="toolbar-label">Category</p><div class="tabs">' + categoryTabs + '</div></div><div><p class="toolbar-label">Child</p><div class="tabs">' + childTabs + '</div></div></section>';
-  }
-
-  function renderSummary(data, filteredItems) {
-    var actionCount = data.items.filter(function (item) { return item.actionNeeded && item.actionNeeded.required; }).length;
-    var reviewCount = data.items.filter(isFlagged).length;
-    var datedCount = data.items.filter(function (item) { return Boolean(item.date); }).length;
-    var generatedAt = data.meta.generatedAt || "Not listed";
     return [
-      '<section class="summary-grid">',
-      '  <article class="summary-card"><span>Total items</span><strong>' + data.items.length + '</strong></article>',
-      '  <article class="summary-card urgent"><span>Needs attention</span><strong>' + reviewCount + '</strong></article>',
-      '  <article class="summary-card"><span>Actions</span><strong>' + actionCount + '</strong></article>',
-      '  <article class="summary-card"><span>Dated items</span><strong>' + datedCount + '</strong></article>',
-      '</section>',
-      '<section class="data-note">',
-      '  <strong>Manual data file:</strong> dashboard-data.js · <strong>Generated:</strong> ' + escapeHtml(generatedAt) + ' · <strong>Showing:</strong> ' + filteredItems.length + ' item(s)',
+      '<header class="top-nav">',
+      '  <a class="brand-mark" href="#top" aria-label="Family Desk home"><span>FD</span><strong>Family Desk</strong></a>',
+      '  <nav class="kid-filter" aria-label="Kid filter">' + kidButtons + '</nav>',
+      '  <nav class="category-filter" aria-label="Category filter">' + categoryButtons + '</nav>',
+      '</header>'
+    ].join("");
+  }
+
+  function renderHero(model, visibleItems) {
+    var nextItem = model.items.filter(function (item) { return item.date; })[0] || model.items[0];
+    var urgentCount = model.items.filter(function (item) { return item.isPriority; }).length;
+    var actionCount = model.items.filter(function (item) { return item.actionRequired; }).length;
+    var rangeText = model.sourceWindow && model.sourceWindow.startDate ? formatDate(model.sourceWindow.startDate) + ' → ' + formatDate(model.sourceWindow.endDate) : 'Current family window';
+
+    return [
+      '<section class="hero-grid" id="top">',
+      '  <article class="hero-copy glass-panel">',
+      '    <p class="eyebrow">Manual-file command center</p>',
+      '    <h1>Family Desk</h1>',
+      '    <p class="deck">A premium dark family dashboard for school, dance, theater, sports, and calendar follow-through. Replace <strong>dashboard-data.js</strong>, refresh, and the desk updates.</p>',
+      '    <div class="hero-metrics">',
+      '      <span><b>' + model.items.length + '</b>Total</span>',
+      '      <span><b>' + urgentCount + '</b>Priority</span>',
+      '      <span><b>' + actionCount + '</b>Actions</span>',
+      '      <span><b>' + visibleItems.length + '</b>Showing</span>',
+      '    </div>',
+      '  </article>',
+      '  <article class="forward-card glass-panel">',
+      '    <p class="eyebrow">Forward look</p>',
+      nextItem ? renderTimelineHero(nextItem) : '<h2>Nothing scheduled</h2><p>Add items to dashboard-data.js to fill the forward look.</p>',
+      '    <div class="source-range">' + escapeHtml(rangeText) + '</div>',
+      '  </article>',
       '</section>'
     ].join("");
   }
 
-  function renderReviewWarnings(data) {
-    var warnings = Array.isArray(data.review.warnings) ? data.review.warnings : [];
-    var unknowns = Array.isArray(data.review.unknowns) ? data.review.unknowns : [];
-    if (!warnings.length && !unknowns.length) return "";
-    return '<section class="review-panel"><h2>Review notes</h2>' +
-      warnings.concat(unknowns).map(function (warning) { return '<p>⚠️ ' + escapeHtml(warning) + '</p>'; }).join("") +
-      '</section>';
+  function renderTimelineHero(item) {
+    return [
+      '<div class="timeline-hero accent-' + escapeHtml(item.accent) + '">',
+      '  <div class="rail-dot"></div>',
+      '  <span class="date-kicker">' + escapeHtml(item.dateLabel) + ' · ' + escapeHtml(item.time) + '</span>',
+      '  <h2>' + escapeHtml(item.title) + '</h2>',
+      '  <p>' + escapeHtml(item.summary) + '</p>',
+      '  <div class="mini-meta"><span>' + escapeHtml(item.kid) + '</span><span>' + escapeHtml(item.location) + '</span></div>',
+      '</div>'
+    ].join("");
   }
 
-  function renderCalendar(data) {
-    var datedItems = data.items.filter(function (item) { return item.date; }).slice(0, 8);
-    if (!datedItems.length) {
-      return '<section class="calendar-panel"><h2>Calendar overview</h2><p>No dated items yet.</p></section>';
-    }
-    return '<section class="calendar-panel"><h2>Calendar overview</h2><div class="calendar-list">' +
-      datedItems.map(function (item) {
-        return '<article><strong>' + formatDate(item.date) + '</strong><span>' + escapeHtml(item.title) + '</span></article>';
-      }).join("") +
-      '</div></section>';
-  }
-
-  function renderPrepItems(prepItems) {
-    if (!prepItems.length) return "";
-    return '<div class="prep"><h3>Prep items</h3><ul>' + prepItems.map(function (prep) {
-      if (typeof prep === "string") return '<li>' + escapeHtml(prep) + '</li>';
-      return '<li>' + escapeHtml(prep.label || "Prep item") + (prep.status ? ' <span>(' + escapeHtml(prep.status) + ')</span>' : '') + '</li>';
-    }).join("") + '</ul></div>';
-  }
-
-  function renderItemCard(item, data) {
-    var locationName = item.location.name || item.location.address || "Location not listed";
-    var sourceSummary = item.source.summary || item.source.subject || "Source not listed";
-    var actionLabel = item.actionNeeded && item.actionNeeded.required ? (item.actionNeeded.label || "Action needed") : "No action listed";
-    var flaggedClass = isFlagged(item) ? " flagged" : "";
-    var priorityClass = item.priority === "urgent" || item.priority === "high" ? " badge-alert" : "";
-    var reviewClass = item.reviewStatus === "needs_review" || item.reviewStatus === "sample" ? " badge-warning" : "";
-    var calendarClass = item.calendarStatus === "needs_review" || item.calendarStatus === "not_checked" ? " badge-warning" : "";
-    var confidenceClass = item.source.confidence === "needs_review" ? " badge-warning" : "";
-    var actionClass = item.actionNeeded && item.actionNeeded.required ? " action-required" : "";
+  function renderTodayBrief(model) {
+    var todayItems = model.items.filter(isToday);
+    var priorityItems = model.items.filter(function (item) { return item.isPriority; }).slice(0, 4);
+    var reviewWarnings = [];
+    if (model.review && Array.isArray(model.review.warnings)) reviewWarnings = reviewWarnings.concat(model.review.warnings);
+    if (model.review && Array.isArray(model.review.unknowns)) reviewWarnings = reviewWarnings.concat(model.review.unknowns);
 
     return [
-      '<article class="item-card' + flaggedClass + '">',
-      '  <div class="card-topline">',
-      '    <span class="category-pill">' + escapeHtml(categoryLabel(data, item.category)) + '</span>',
-      '    <span>' + escapeHtml(item.type) + '</span>',
+      '<section class="brief-grid">',
+      '  <article class="today-brief glass-panel">',
+      '    <p class="eyebrow">Today brief</p>',
+      '    <h2>' + (todayItems.length ? todayItems.length + ' item(s) today' : 'No dated items today') + '</h2>',
+      todayItems.length ? todayItems.slice(0, 3).map(renderMiniCard).join("") : '<p class="muted">Nothing in dashboard-data.js lands on today. Upcoming items remain visible below.</p>',
+      '  </article>',
+      '  <article class="priority-stack glass-panel">',
+      '    <p class="eyebrow">Auto-focus</p>',
+      '    <h2>Priority stack</h2>',
+      priorityItems.length ? priorityItems.map(renderFocusRow).join("") : '<p class="muted">No urgent, action, review, or calendar flags are active.</p>',
+      reviewWarnings.length ? '<div class="warning-strip">' + reviewWarnings.map(function (warning) { return '<span>⚠ ' + escapeHtml(warning) + '</span>'; }).join("") + '</div>' : '',
+      '  </article>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderMiniCard(item) {
+    return '<button class="mini-card accent-' + escapeHtml(item.accent) + '" data-open-item="' + escapeHtml(item.id) + '"><span>' + escapeHtml(item.time) + '</span><strong>' + escapeHtml(item.title) + '</strong><em>' + escapeHtml(item.kid) + '</em></button>';
+  }
+
+  function renderFocusRow(item) {
+    var label = item.actionRequired ? item.actions : (item.reviewStatus === "needs_review" ? "Needs review" : item.calStatus);
+    return '<button class="focus-row" data-open-item="' + escapeHtml(item.id) + '"><span class="status-dot accent-' + escapeHtml(item.accent) + '"></span><strong>' + escapeHtml(item.title) + '</strong><em>' + escapeHtml(label) + '</em></button>';
+  }
+
+  function renderTimeline(model, visibleItems) {
+    if (!model.items.length) {
+      return '<section class="empty-state glass-panel"><p class="eyebrow">Empty dashboard</p><h2>No dashboard items yet</h2><p>dashboard-data.js loaded successfully, but its items array is empty.</p></section>';
+    }
+
+    if (!visibleItems.length) {
+      return '<section class="empty-state glass-panel"><p class="eyebrow">No matches</p><h2>No items match these filters</h2><p>Try Family or All to return to the full dashboard.</p></section>';
+    }
+
+    return [
+      '<section class="content-grid">',
+      '  <div class="event-column">',
+      '    <div class="section-heading"><p class="eyebrow">Timeline rail</p><h2>Family flow</h2></div>',
+      visibleItems.map(renderEventCard).join(""),
       '  </div>',
-      '  <h2>' + escapeHtml(item.title) + '</h2>',
-      '  <p class="kids">' + escapeHtml(item.childNames.length ? item.childNames.join(", ") : "Family") + '</p>',
-      '  <dl class="details">',
-      '    <div><dt>Date</dt><dd>' + formatDate(item.date) + '</dd></div>',
-      '    <div><dt>Time</dt><dd>' + escapeHtml(formatTime(item)) + '</dd></div>',
-      '    <div><dt>Location</dt><dd>' + escapeHtml(locationName) + '</dd></div>',
-      '    <div><dt>Source</dt><dd>' + escapeHtml(sourceSummary) + '</dd></div>',
-      '  </dl>',
-      '  <div class="badges">',
-      renderBadge("Priority", item.priority, priorityClass),
-      renderBadge("Calendar", item.calendarStatus, calendarClass),
-      renderBadge("Review", item.reviewStatus, reviewClass),
-      renderBadge("Confidence", item.source.confidence || "not listed", confidenceClass),
+      '  <aside class="side-column">',
+      renderCalendarOverview(model),
+      renderSourceLedger(model),
+      '  </aside>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderEventCard(item) {
+    var deadline = item.deadline ? '<span class="deadline">Due ' + escapeHtml(formatDate(item.deadline)) + '</span>' : '';
+    return [
+      '<article class="event-card glass-panel accent-' + escapeHtml(item.accent) + '">',
+      '  <button class="card-hit" data-open-item="' + escapeHtml(item.id) + '" aria-label="Open details for ' + escapeHtml(item.title) + '"></button>',
+      '  <div class="event-rail"><span></span></div>',
+      '  <div class="event-main">',
+      '    <div class="event-topline"><span class="category-pill">' + escapeHtml(item.categoryLabel) + '</span><span>' + escapeHtml(item.type) + '</span></div>',
+      '    <h3>' + escapeHtml(item.title) + '</h3>',
+      '    <p class="kid-line">' + escapeHtml(item.kid) + '</p>',
+      '    <p class="summary-line">' + escapeHtml(item.summary) + '</p>',
+      '    <dl class="fact-grid">',
+      '      <div><dt>Date</dt><dd>' + escapeHtml(item.longDateLabel) + '</dd></div>',
+      '      <div><dt>Time</dt><dd>' + escapeHtml(item.time) + '</dd></div>',
+      '      <div><dt>Place</dt><dd>' + escapeHtml(item.location) + '</dd></div>',
+      '      <div><dt>From</dt><dd>' + escapeHtml(item.from) + '</dd></div>',
+      '    </dl>',
+      '    <div class="badge-row">',
+      renderBadge("Urgency", item.priority, item.priority === "urgent" || item.priority === "high" ? "hot" : ""),
+      renderBadge("Calendar", item.calStatus, item.calStatus === "needs_review" || item.calStatus === "not_checked" ? "warn" : ""),
+      renderBadge("Action", item.actionRequired ? "needed" : "not listed", item.actionRequired ? "warn" : ""),
+      renderBadge("Review", item.reviewStatus, item.reviewStatus === "needs_review" || item.reviewStatus === "sample" ? "warn" : ""),
+      '    </div>',
+      '    <div class="action-box"><strong>' + (item.actionRequired ? 'Action needed' : 'Action') + '</strong><span>' + escapeHtml(item.actions) + '</span>' + deadline + '</div>',
+      renderPrepList(item),
+      '    <div class="card-links">',
+      item.link ? '<a href="' + escapeHtml(item.link) + '" target="_blank" rel="noopener">Open source</a>' : '<span>Source link not listed</span>',
+      item.calendarHref ? '<a href="' + escapeHtml(item.calendarHref) + '" target="_blank" rel="noopener">Add to calendar</a>' : '<span>Add-to-calendar unavailable</span>',
+      '    </div>',
       '  </div>',
-      '  <div class="action' + actionClass + '"><strong>Action:</strong> ' + escapeHtml(actionLabel) + '</div>',
-      renderPrepItems(item.prepItems),
-      item.notes ? '<p class="notes"><strong>Notes:</strong> ' + escapeHtml(item.notes) + '</p>' : '',
       '</article>'
     ].join("");
   }
 
-  function renderItems(data, filteredItems) {
-    if (!data.items.length) {
-      return '<section class="empty-state"><h2>No dashboard items yet</h2><p>dashboard-data.js loaded successfully, but it contains zero items.</p></section>';
-    }
-    if (!filteredItems.length) {
-      return '<section class="empty-state"><h2>No items match these filters</h2><p>Try All, Family, or another child filter.</p></section>';
-    }
-    return '<section class="cards-grid">' + filteredItems.map(function (item) { return renderItemCard(item, data); }).join("") + '</section>';
+  function renderPrepList(item) {
+    if (!item.prep.length) return '<div class="prep-list muted"><strong>Prep</strong><span>Prep items not listed</span></div>';
+    return '<div class="prep-list"><strong>Prep</strong><ul>' + item.prep.map(function (prep) {
+      return '<li><span></span>' + escapeHtml(prep.label) + ' <em>' + escapeHtml(prep.status) + '</em></li>';
+    }).join("") + '</ul></div>';
   }
 
-  function renderDashboard(data) {
-    var filteredItems = getFilteredItems(data);
-    root.innerHTML = [
-      '<main class="shell">',
-      '  <header class="hero">',
-      '    <p class="eyebrow">Manual-file family viewer</p>',
-      '    <h1>Family Dashboard</h1>',
-      '    <p>Open this file directly. Replace <strong>dashboard-data.js</strong> whenever ChatGPT generates updated family data.</p>',
-      '  </header>',
-      renderTabs(data),
-      renderSummary(data, filteredItems),
-      renderReviewWarnings(data),
-      '  <div class="main-layout">',
-      '    <div>', renderItems(data, filteredItems), '</div>',
-      '    <aside>', renderCalendar(data), '</aside>',
-      '  </div>',
-      '</main>'
+  function renderCalendarOverview(model) {
+    var dated = model.items.filter(function (item) { return item.date; }).slice(0, 7);
+    return [
+      '<section class="calendar-overview glass-panel">',
+      '  <p class="eyebrow">Calendar overview</p>',
+      '  <h2>Next dated items</h2>',
+      dated.length ? dated.map(function (item) {
+        return '<button class="calendar-row" data-open-item="' + escapeHtml(item.id) + '"><span>' + escapeHtml(item.dateLabel) + '</span><strong>' + escapeHtml(item.title) + '</strong><em>' + escapeHtml(item.time) + '</em></button>';
+      }).join("") : '<p class="muted">No dated items yet.</p>',
+      '</section>'
     ].join("");
+  }
 
+  function renderSourceLedger(model) {
+    return [
+      '<section class="source-ledger glass-panel">',
+      '  <p class="eyebrow">Manual data</p>',
+      '  <h2>Source ledger</h2>',
+      '  <p><strong>File:</strong> dashboard-data.js</p>',
+      '  <p><strong>Generated:</strong> ' + escapeHtml(model.generatedAt) + '</p>',
+      '  <p><strong>Refresh:</strong> replace the data file, then refresh the browser.</p>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderOverlay(model) {
+    if (!state.selectedItemId) return "";
+    var item = model.items.find(function (candidate) { return candidate.id === state.selectedItemId; });
+    if (!item) return "";
+    return [
+      '<div class="overlay-backdrop" data-close-overlay="true">',
+      '  <section class="detail-overlay glass-panel" role="dialog" aria-modal="true">',
+      '    <button class="close-overlay" data-close-overlay="true" aria-label="Close details">×</button>',
+      '    <p class="eyebrow">Item detail</p>',
+      '    <h2>' + escapeHtml(item.title) + '</h2>',
+      '    <p class="overlay-summary">' + escapeHtml(item.details) + '</p>',
+      '    <dl class="fact-grid overlay-facts">',
+      '      <div><dt>Kid</dt><dd>' + escapeHtml(item.kid) + '</dd></div>',
+      '      <div><dt>Date</dt><dd>' + escapeHtml(item.longDateLabel) + '</dd></div>',
+      '      <div><dt>Time</dt><dd>' + escapeHtml(item.time) + '</dd></div>',
+      '      <div><dt>Location</dt><dd>' + escapeHtml(item.location) + '</dd></div>',
+      '      <div><dt>Received</dt><dd>' + escapeHtml(item.received) + '</dd></div>',
+      '      <div><dt>Tags</dt><dd>' + escapeHtml(item.tags.length ? item.tags.join(", ") : "Not listed") + '</dd></div>',
+      '    </dl>',
+      renderPrepList(item),
+      '  </section>',
+      '</div>'
+    ].join("");
+  }
+
+  function attachEvents(model) {
     Array.prototype.forEach.call(root.querySelectorAll("[data-category]"), function (button) {
       button.addEventListener("click", function () {
         state.activeCategory = button.getAttribute("data-category");
-        renderDashboard(data);
+        state.selectedItemId = null;
+        renderDashboard(model);
       });
     });
 
-    Array.prototype.forEach.call(root.querySelectorAll("[data-child]"), function (button) {
+    Array.prototype.forEach.call(root.querySelectorAll("[data-kid]"), function (button) {
       button.addEventListener("click", function () {
-        state.activeChild = button.getAttribute("data-child");
-        renderDashboard(data);
+        state.activeKid = button.getAttribute("data-kid");
+        state.selectedItemId = null;
+        renderDashboard(model);
+      });
+    });
+
+    Array.prototype.forEach.call(root.querySelectorAll("[data-open-item]"), function (button) {
+      button.addEventListener("click", function (event) {
+        event.preventDefault();
+        state.selectedItemId = button.getAttribute("data-open-item");
+        renderDashboard(model);
+      });
+    });
+
+    Array.prototype.forEach.call(root.querySelectorAll("[data-close-overlay]"), function (button) {
+      button.addEventListener("click", function (event) {
+        if (event.target !== button && button.className !== "close-overlay") return;
+        state.selectedItemId = null;
+        renderDashboard(model);
       });
     });
   }
 
-  try {
-    var normalized = normalizeData(window.DASHBOARD_DATA);
-    if (normalized.error) {
-      renderError(normalized.error);
+  function renderDashboard(model) {
+    if (model.error) {
+      renderDataProblem(model);
       return;
     }
-    renderDashboard(normalized);
+
+    var visibleItems = getVisibleItems(model);
+    root.innerHTML = [
+      '<main class="family-desk">',
+      renderTopNav(model),
+      renderHero(model, visibleItems),
+      renderTodayBrief(model),
+      renderTimeline(model, visibleItems),
+      renderOverlay(model),
+      '</main>'
+    ].join("");
+    attachEvents(model);
+  }
+
+  try {
+    renderDashboard(adaptManualDataToVisualModel(getManualDashboardData()));
   } catch (error) {
-    renderError("The dashboard hit an unexpected rendering problem. Check dashboard-data.js for invalid fields, replace it, and refresh. Details: " + error.message);
+    renderDataProblem(createVisibleErrorState({
+      code: "render-error",
+      message: "The dashboard hit an unexpected rendering problem. Check dashboard-data.js for invalid fields, replace it, and refresh. Details: " + error.message
+    }));
   }
 }());

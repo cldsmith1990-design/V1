@@ -1,6 +1,6 @@
 // FAMILY DASHBOARD MANUAL DATA FILE
 // Replace this whole file when ChatGPT generates updated dashboard data.
-// This file must define window.DASHBOARD_DATA and must not use imports, modules, or fetch.
+// This file must define window.DASHBOARD_DATA and must not use module loaders or network calls.
 window.DASHBOARD_DATA = {
   meta: {
     schemaVersion: "1.0.0",
