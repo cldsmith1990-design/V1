@@ -5,7 +5,9 @@
   var state = {
     activeCategory: "all",
     activeKid: "all",
-    selectedItemId: null
+    selectedItemId: null,
+    selectedMonth: null,   // { year, month } — null = auto-anchor on next render
+    selectedDate: null     // "YYYY-MM-DD" or null
   };
 
   var VISUAL_CATEGORIES = [
@@ -28,6 +30,11 @@
     other: "slate"
   };
 
+  var MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var DOW_LABELS  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  // ─── Utility ────────────────────────────────────────────────────────────────
+
   function escapeHtml(value) {
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -46,6 +53,8 @@
       .replace(/_/g, " ")
       .replace(/\b\w/g, function (letter) { return letter.toUpperCase(); });
   }
+
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
 
   function parseLocalDate(dateValue) {
     if (!dateValue) return null;
@@ -88,6 +97,13 @@
     var start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     return Math.round((date.getTime() - start.getTime()) / 86400000);
   }
+
+  function todayKey() {
+    var t = new Date();
+    return t.getFullYear() + "-" + pad2(t.getMonth() + 1) + "-" + pad2(t.getDate());
+  }
+
+  // ─── Data loading & adapting ─────────────────────────────────────────────────
 
   // ChatGPT generates dashboard-data.js. The app reads that global file and adapts it
   // into the restored Family Desk visual model without mutating the loaded object.
@@ -218,6 +234,8 @@
       longDateLabel: formatLongDate(item.date),
       time: formatTimeRange(item),
       allDay: Boolean(item.allDay),
+      startTime: item.startTime || null,
+      endTime: item.endTime || null,
       timezone: item.timezone || meta.timezone || null,
       location: location.name || location.address || "Location not listed",
       locationNotes: location.notes || "",
@@ -263,9 +281,20 @@
     });
   }
 
+  // ─── Shared render helpers ────────────────────────────────────────────────────
+
   function renderBadge(label, value, modifier) {
     return '<span class="badge ' + escapeHtml(modifier || "") + '"><b>' + escapeHtml(label) + '</b>' + escapeHtml(value || "not listed") + '</span>';
   }
+
+  function renderPrepList(item) {
+    if (!item.prep.length) return '<div class="prep-list muted"><strong>Prep</strong><span>Prep items not listed</span></div>';
+    return '<div class="prep-list"><strong>Prep</strong><ul>' + item.prep.map(function (prep) {
+      return '<li><span></span>' + escapeHtml(prep.label) + ' <em>' + escapeHtml(prep.status) + '</em></li>';
+    }).join("") + '</ul></div>';
+  }
+
+  // ─── Timeline / standard view renderers ──────────────────────────────────────
 
   function renderDataProblem(errorState) {
     root.innerHTML = [
@@ -434,13 +463,6 @@
     ].join("");
   }
 
-  function renderPrepList(item) {
-    if (!item.prep.length) return '<div class="prep-list muted"><strong>Prep</strong><span>Prep items not listed</span></div>';
-    return '<div class="prep-list"><strong>Prep</strong><ul>' + item.prep.map(function (prep) {
-      return '<li><span></span>' + escapeHtml(prep.label) + ' <em>' + escapeHtml(prep.status) + '</em></li>';
-    }).join("") + '</ul></div>';
-  }
-
   function renderCalendarOverview(model) {
     var dated = model.items.filter(function (item) { return item.date; }).slice(0, 7);
     return [
@@ -491,6 +513,354 @@
     ].join("");
   }
 
+  // ─── Calendar Command View — data helpers ────────────────────────────────────
+
+  function getCalendarAnchorDate(model) {
+    var today = new Date();
+    var sw = model.sourceWindow;
+    if (sw && sw.startDate && sw.endDate) {
+      var swStart = parseLocalDate(sw.startDate);
+      var swEnd   = parseLocalDate(sw.endDate);
+      var todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (swStart && swEnd && todayMid >= swStart && todayMid <= swEnd) {
+        return { year: today.getFullYear(), month: today.getMonth() };
+      }
+    }
+    var upcoming = model.items.filter(function (item) {
+      return item.date && daysUntil(item.date) >= 0;
+    });
+    if (upcoming.length) {
+      var d = parseLocalDate(upcoming[0].date);
+      if (d) return { year: d.getFullYear(), month: d.getMonth() };
+    }
+    if (model.generatedAt && model.generatedAt !== "Not listed") {
+      var gd = new Date(model.generatedAt);
+      if (!isNaN(gd.getTime())) return { year: gd.getFullYear(), month: gd.getMonth() };
+    }
+    var dated = model.items.filter(function (item) { return item.date; });
+    if (dated.length) {
+      var ed = parseLocalDate(dated[0].date);
+      if (ed) return { year: ed.getFullYear(), month: ed.getMonth() };
+    }
+    return { year: today.getFullYear(), month: today.getMonth() };
+  }
+
+  function getMonthMatrix(year, month) {
+    var firstDay  = new Date(year, month, 1);
+    var lastDay   = new Date(year, month + 1, 0);
+    var startDow  = firstDay.getDay();
+    var totalDays = lastDay.getDate();
+    var weeks = [];
+    var week  = [];
+    var day   = 1;
+
+    for (var pre = 0; pre < startDow; pre++) {
+      var prevD = new Date(year, month, 1 - (startDow - pre));
+      week.push({ year: prevD.getFullYear(), month: prevD.getMonth(), day: prevD.getDate(), isCurrentMonth: false });
+    }
+
+    while (day <= totalDays) {
+      week.push({ year: year, month: month, day: day, isCurrentMonth: true });
+      day++;
+      if (week.length === 7) { weeks.push(week); week = []; }
+    }
+
+    if (week.length > 0) {
+      var trail     = 1;
+      var trailMo   = (month + 1) % 12;
+      var trailYr   = month === 11 ? year + 1 : year;
+      while (week.length < 7) {
+        week.push({ year: trailYr, month: trailMo, day: trail, isCurrentMonth: false });
+        trail++;
+      }
+      weeks.push(week);
+    }
+
+    return weeks;
+  }
+
+  function groupItemsByDate(items) {
+    var groups = {};
+    items.forEach(function (item) {
+      if (!item.date) return;
+      if (!groups[item.date]) groups[item.date] = [];
+      groups[item.date].push(item);
+    });
+    return groups;
+  }
+
+  function parseTimeToMinutes(timeStr) {
+    if (!timeStr) return null;
+    var parts = String(timeStr).split(":");
+    if (parts.length < 2) return null;
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    return (isNaN(h) || isNaN(m)) ? null : h * 60 + m;
+  }
+
+  function detectTimeConflicts(items) {
+    var conflictIds = {};
+    var byDate = groupItemsByDate(items);
+    Object.keys(byDate).forEach(function (date) {
+      var timed = byDate[date].filter(function (item) {
+        return !item.allDay && item.startTime && item.endTime;
+      });
+      for (var i = 0; i < timed.length; i++) {
+        for (var j = i + 1; j < timed.length; j++) {
+          var aS = parseTimeToMinutes(timed[i].startTime);
+          var aE = parseTimeToMinutes(timed[i].endTime);
+          var bS = parseTimeToMinutes(timed[j].startTime);
+          var bE = parseTimeToMinutes(timed[j].endTime);
+          if (aS !== null && aE !== null && bS !== null && bE !== null && aS < bE && bS < aE) {
+            conflictIds[timed[i].id] = true;
+            conflictIds[timed[j].id] = true;
+          }
+        }
+      }
+    });
+    return conflictIds;
+  }
+
+  function getCalendarStatusLink(item) {
+    if (item.calStatus === "on_calendar") {
+      if (item.link) return '<a href="' + escapeHtml(item.link) + '" target="_blank" rel="noopener">Open calendar event</a>';
+      return '<span class="muted">Already on calendar</span>';
+    }
+    if ((item.calStatus === "needs_review" || item.calStatus === "not_checked")) {
+      return '<span class="badge warn">⚠ Calendar unconfirmed</span>';
+    }
+    if (item.calendarHref) {
+      return '<a href="' + escapeHtml(item.calendarHref) + '" target="_blank" rel="noopener">Add to calendar</a>';
+    }
+    return '';
+  }
+
+  // ─── Calendar Command View — renderers ───────────────────────────────────────
+
+  function renderCalendarCommandView(model, visibleItems) {
+    var anchor = state.selectedMonth || getCalendarAnchorDate(model);
+    state.selectedMonth = anchor;
+    var byDate    = groupItemsByDate(visibleItems);
+    var conflicts = detectTimeConflicts(visibleItems);
+
+    return [
+      '<section class="cal-view">',
+      renderCalendarToolbar(anchor, visibleItems),
+      '<div class="cal-body">',
+      '<div class="cal-main">',
+      renderMonthGrid(anchor, byDate, conflicts),
+      renderSelectedDayAgenda(byDate, conflicts),
+      '</div>',
+      '<aside class="cal-side">',
+      renderUpcomingStrip(visibleItems),
+      renderCalendarReviewPanel(visibleItems, conflicts),
+      renderSourceLedger(model),
+      '</aside>',
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderCalendarToolbar(anchor, visibleItems) {
+    var title = MONTH_NAMES[anchor.month] + " " + anchor.year;
+    var mStart = anchor.year + "-" + pad2(anchor.month + 1) + "-01";
+    var mEnd   = anchor.year + "-" + pad2(anchor.month + 1) + "-31";
+    var monthItems    = visibleItems.filter(function (i) { return i.date && i.date >= mStart && i.date <= mEnd; });
+    var actionCount   = monthItems.filter(function (i) { return i.actionRequired; }).length;
+    var reviewCount   = monthItems.filter(function (i) { return i.reviewStatus === "needs_review"; }).length;
+    var calRiskCount  = monthItems.filter(function (i) {
+      return i.calStatus === "not_on_calendar" || i.calStatus === "needs_review" || i.calStatus === "not_checked";
+    }).length;
+
+    return [
+      '<div class="cal-toolbar glass-panel">',
+      '  <div class="cal-toolbar-left">',
+      '    <p class="eyebrow">Calendar command</p>',
+      '    <span class="cal-month-title">' + escapeHtml(title) + '</span>',
+      '  </div>',
+      '  <div class="cal-toolbar-counts">',
+      '    <span><b>' + monthItems.length + '</b>This month</span>',
+      '    <span class="' + (actionCount  ? 'count-warn' : '') + '"><b>' + actionCount  + '</b>Actions</span>',
+      '    <span class="' + (reviewCount  ? 'count-warn' : '') + '"><b>' + reviewCount  + '</b>Review</span>',
+      '    <span class="' + (calRiskCount ? 'count-warn' : '') + '"><b>' + calRiskCount + '</b>Cal risk</span>',
+      '  </div>',
+      '  <nav class="cal-nav" aria-label="Month navigation">',
+      '    <button class="cal-nav-btn" data-cal-month="prev" aria-label="Previous month">&#8249;</button>',
+      '    <button class="cal-nav-btn cal-nav-btn--today" data-cal-month="today" aria-label="Go to today">Today</button>',
+      '    <button class="cal-nav-btn" data-cal-month="next" aria-label="Next month">&#8250;</button>',
+      '  </nav>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderMonthGrid(anchor, byDate, conflicts) {
+    var weeks  = getMonthMatrix(anchor.year, anchor.month);
+    var tKey   = todayKey();
+    var header = '<div class="cal-grid-header">' + DOW_LABELS.map(function (d) {
+      return '<div class="cal-dow">' + d + '</div>';
+    }).join("") + '</div>';
+
+    var rows = weeks.map(function (week) {
+      return '<div class="cal-week">' + week.map(function (cell) {
+        var key = cell.year + "-" + pad2(cell.month + 1) + "-" + pad2(cell.day);
+        return renderDayCell(cell, key, byDate[key] || [], key === tKey, key === state.selectedDate, conflicts);
+      }).join("") + '</div>';
+    }).join("");
+
+    return '<div class="cal-grid glass-panel">' + header + rows + '</div>';
+  }
+
+  function renderDayCell(cell, key, dayItems, isTodayCell, isSelected, conflicts) {
+    var hasAction   = dayItems.some(function (i) { return i.actionRequired; });
+    var hasReview   = dayItems.some(function (i) {
+      return i.reviewStatus === "needs_review" || i.calStatus === "needs_review" ||
+             i.calStatus === "not_checked" || i.calStatus === "not_on_calendar";
+    });
+    var hasConflict = dayItems.some(function (i) { return conflicts[i.id]; });
+
+    var cls = "cal-day" +
+      (!cell.isCurrentMonth ? " cal-day--overflow" : "") +
+      (isTodayCell   ? " cal-day--today"    : "") +
+      (isSelected    ? " cal-day--selected" : "") +
+      (hasConflict   ? " cal-day--conflict" : "");
+
+    var dots = (hasAction   ? '<span class="cal-dot cal-dot--action"   title="Action needed"></span>'  : "") +
+               (hasReview   ? '<span class="cal-dot cal-dot--review"   title="Needs review"></span>'   : "") +
+               (hasConflict ? '<span class="cal-dot cal-dot--conflict" title="Time conflict"></span>'  : "");
+
+    var pills = dayItems.slice(0, 3).map(function (item) {
+      return '<div class="cal-pill accent-' + escapeHtml(item.accent) + '" title="' + escapeHtml(item.title) + '">' +
+        escapeHtml(item.title) + '</div>';
+    }).join("");
+
+    var overflow = dayItems.length > 3
+      ? '<div class="cal-overflow">+' + (dayItems.length - 3) + ' more</div>'
+      : "";
+
+    return [
+      '<button class="' + cls + '" data-cal-date="' + escapeHtml(key) + '">',
+      '  <div class="cal-day-hd"><span class="cal-day-num">' + cell.day + '</span>',
+      dots ? '<span class="cal-day-dots">' + dots + '</span>' : '',
+      '  </div>',
+      pills,
+      overflow,
+      '</button>'
+    ].join("");
+  }
+
+  function renderSelectedDayAgenda(byDate, conflicts) {
+    if (!state.selectedDate) {
+      return [
+        '<div class="cal-agenda glass-panel">',
+        '  <p class="eyebrow">Day agenda</p>',
+        '  <p class="muted">Click a day on the calendar to see its items here.</p>',
+        '</div>'
+      ].join("");
+    }
+
+    var dayItems  = byDate[state.selectedDate] || [];
+    var dateLabel = formatLongDate(state.selectedDate);
+
+    return [
+      '<div class="cal-agenda glass-panel">',
+      '  <p class="eyebrow">Day agenda</p>',
+      '  <h3 class="cal-agenda-date">' + escapeHtml(dateLabel) + '</h3>',
+      dayItems.length
+        ? dayItems.map(function (item) { return renderAgendaItem(item, conflicts); }).join("")
+        : '<p class="muted">No items scheduled for this day.</p>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderAgendaItem(item, conflicts) {
+    var hasConflict = conflicts[item.id];
+    var deadline    = item.deadline ? '<span class="deadline">Due ' + escapeHtml(formatDate(item.deadline)) + '</span>' : '';
+
+    return [
+      '<div class="agenda-item' + (hasConflict ? ' agenda-item--conflict' : '') + '">',
+      '  <div class="agenda-item-hd">',
+      '    <span class="agenda-accent-bar accent-' + escapeHtml(item.accent) + '"></span>',
+      '    <span class="agenda-time">' + escapeHtml(item.time) + '</span>',
+      '    <span class="category-pill">' + escapeHtml(item.categoryLabel) + '</span>',
+      hasConflict ? '<span class="badge warn agenda-conflict-badge">⚠ Conflict</span>' : '',
+      '  </div>',
+      '  <button class="agenda-title" data-open-item="' + escapeHtml(item.id) + '">' + escapeHtml(item.title) + '</button>',
+      '  <div class="agenda-meta"><span>' + escapeHtml(item.kid) + '</span><span>' + escapeHtml(item.location) + '</span></div>',
+      item.actionRequired
+        ? '<div class="action-box"><strong>Action needed</strong><span>' + escapeHtml(item.actions) + '</span>' + deadline + '</div>'
+        : '',
+      item.prep.length ? renderPrepList(item) : '',
+      '  <div class="agenda-badges">',
+      renderBadge("Cal", item.calStatus,
+        (item.calStatus === "needs_review" || item.calStatus === "not_checked" || item.calStatus === "not_on_calendar") ? "warn" : ""),
+      renderBadge("Review", item.reviewStatus, item.reviewStatus === "needs_review" ? "warn" : ""),
+      '  </div>',
+      '  <div class="agenda-links">',
+      item.link ? '<a href="' + escapeHtml(item.link) + '" target="_blank" rel="noopener">Open source</a>' : '',
+      getCalendarStatusLink(item),
+      '  </div>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderUpcomingStrip(visibleItems) {
+    var tKey     = todayKey();
+    var upcoming = visibleItems.filter(function (item) { return item.date && item.date >= tKey; }).slice(0, 7);
+
+    return [
+      '<section class="cal-upcoming glass-panel">',
+      '  <p class="eyebrow">Upcoming</p>',
+      '  <h3>Next 7 items</h3>',
+      upcoming.length
+        ? upcoming.map(function (item) {
+          return '<button class="upcoming-row" data-open-item="' + escapeHtml(item.id) + '">' +
+            '<span class="upcoming-date">' + escapeHtml(item.dateLabel) + '</span>' +
+            '<strong>' + escapeHtml(item.title) + '</strong>' +
+            '<em>' + escapeHtml(item.kid) + '</em>' +
+            '</button>';
+        }).join("")
+        : '<p class="muted">No upcoming dated items.</p>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderCalendarReviewPanel(visibleItems, conflicts) {
+    var flagged = visibleItems.filter(function (item) {
+      if (!item.date) return false;
+      return item.reviewStatus === "needs_review" ||
+             item.calStatus === "needs_review" ||
+             item.calStatus === "not_checked" ||
+             item.calStatus === "not_on_calendar" ||
+             (!item.allDay && !item.startTime) ||
+             conflicts[item.id];
+    });
+
+    return [
+      '<section class="cal-review-panel glass-panel">',
+      '  <p class="eyebrow">Calendar risks</p>',
+      '  <h3>Needs attention</h3>',
+      flagged.length
+        ? flagged.map(function (item) {
+          var reasons = [];
+          if (item.reviewStatus === "needs_review") reasons.push("review");
+          if (item.calStatus === "not_on_calendar") reasons.push("not on calendar");
+          if (item.calStatus === "needs_review" || item.calStatus === "not_checked") reasons.push("cal unconfirmed");
+          if (!item.allDay && !item.startTime) reasons.push("no time");
+          if (conflicts[item.id]) reasons.push("conflict");
+          return '<button class="review-row" data-open-item="' + escapeHtml(item.id) + '">' +
+            '<span class="status-dot accent-' + escapeHtml(item.accent) + '"></span>' +
+            '<div class="review-row-body">' +
+            '<strong>' + escapeHtml(item.title) + '</strong>' +
+            '<span>' + escapeHtml(item.dateLabel) + ' · ' + reasons.join(", ") + '</span>' +
+            '</div></button>';
+        }).join("")
+        : '<p class="muted">No calendar risks for the current filter.</p>',
+      '</section>'
+    ].join("");
+  }
+
+  // ─── Event delegation ─────────────────────────────────────────────────────────
+
   function attachEvents(model) {
     Array.prototype.forEach.call(root.querySelectorAll("[data-category]"), function (button) {
       button.addEventListener("click", function () {
@@ -511,6 +881,7 @@
     Array.prototype.forEach.call(root.querySelectorAll("[data-open-item]"), function (button) {
       button.addEventListener("click", function (event) {
         event.preventDefault();
+        event.stopPropagation();
         state.selectedItemId = button.getAttribute("data-open-item");
         renderDashboard(model);
       });
@@ -523,7 +894,40 @@
         renderDashboard(model);
       });
     });
+
+    // Calendar month navigation
+    Array.prototype.forEach.call(root.querySelectorAll("[data-cal-month]"), function (button) {
+      button.addEventListener("click", function () {
+        var action = button.getAttribute("data-cal-month");
+        var cur = state.selectedMonth || { year: new Date().getFullYear(), month: new Date().getMonth() };
+        if (action === "prev") {
+          state.selectedMonth = cur.month === 0
+            ? { year: cur.year - 1, month: 11 }
+            : { year: cur.year, month: cur.month - 1 };
+        } else if (action === "next") {
+          state.selectedMonth = cur.month === 11
+            ? { year: cur.year + 1, month: 0 }
+            : { year: cur.year, month: cur.month + 1 };
+        } else if (action === "today") {
+          var t = new Date();
+          state.selectedMonth = { year: t.getFullYear(), month: t.getMonth() };
+          state.selectedDate  = null;
+        }
+        renderDashboard(model);
+      });
+    });
+
+    // Calendar day selection — stopPropagation from child data-open-item buttons is already set above
+    Array.prototype.forEach.call(root.querySelectorAll("[data-cal-date]"), function (button) {
+      button.addEventListener("click", function () {
+        var key = button.getAttribute("data-cal-date");
+        state.selectedDate = state.selectedDate === key ? null : key;
+        renderDashboard(model);
+      });
+    });
   }
+
+  // ─── Main render entry ────────────────────────────────────────────────────────
 
   function renderDashboard(model) {
     if (model.error) {
@@ -532,6 +936,19 @@
     }
 
     var visibleItems = getVisibleItems(model);
+
+    if (state.activeCategory === "calendar") {
+      root.innerHTML = [
+        '<main class="family-desk">',
+        renderTopNav(model),
+        renderCalendarCommandView(model, visibleItems),
+        renderOverlay(model),
+        '</main>'
+      ].join("");
+      attachEvents(model);
+      return;
+    }
+
     root.innerHTML = [
       '<main class="family-desk">',
       renderTopNav(model),
