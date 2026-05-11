@@ -7,8 +7,11 @@
     activeKid: "all",
     selectedItemId: null,
     selectedMonth: null,   // { year, month } — null = auto-anchor on next render
-    selectedDate: null     // "YYYY-MM-DD" or null
+    selectedDate: null,    // "YYYY-MM-DD" or null
+    exportPromptText: null // non-null = show export modal in Notes tab
   };
+
+  var currentModel = null; // set on every renderDashboard call
 
   var VISUAL_CATEGORIES = [
     { id: "all", label: "All" },
@@ -17,7 +20,8 @@
     { id: "theater", label: "Theater" },
     { id: "sports", label: "Sports" },
     { id: "calendar", label: "Calendar" },
-    { id: "family", label: "Family" }
+    { id: "family", label: "Family" },
+    { id: "dashboard-notes", label: "Notes" }
   ];
 
   var CATEGORY_ACCENTS = {
@@ -650,10 +654,10 @@
       '<div class="cal-main">',
       renderMonthGrid(anchor, byDate, conflicts),
       renderSelectedDayAgenda(byDate, conflicts),
+      renderCalendarReviewPanel(visibleItems, conflicts),
       '</div>',
       '<aside class="cal-side">',
       renderUpcomingStrip(visibleItems),
-      renderCalendarReviewPanel(visibleItems, conflicts),
       renderSourceLedger(model),
       '</aside>',
       '</div>',
@@ -859,6 +863,303 @@
     ].join("");
   }
 
+  // ─── Compact card ────────────────────────────────────────────────────────────
+
+  function renderCompactItemCard(item) {
+    var urgentCls = (item.priority === "urgent" || item.priority === "high") ? " compact-card--urgent" : "";
+    var deadline = item.deadline ? '<span class="compact-deadline">Due ' + escapeHtml(formatDate(item.deadline)) + '</span>' : '';
+    return [
+      '<article class="compact-card glass-panel accent-' + escapeHtml(item.accent) + urgentCls + '">',
+      '  <button class="card-hit" data-open-item="' + escapeHtml(item.id) + '" aria-label="' + escapeHtml(item.title) + '"></button>',
+      '  <div class="compact-rail"><span></span></div>',
+      '  <div class="compact-body">',
+      '    <div class="compact-topline">',
+      '      <span class="category-pill">' + escapeHtml(item.categoryLabel) + '</span>',
+      item.actionRequired ? '<span class="badge warn compact-flag">Action</span>' : '',
+      item.reviewStatus === "needs_review" ? '<span class="badge warn compact-flag">Review</span>' : '',
+      (item.calStatus === "not_checked" || item.calStatus === "needs_review" || item.calStatus === "not_on_calendar") ? '<span class="badge warn compact-flag">Cal</span>' : '',
+      '    </div>',
+      '    <h3 class="compact-title">' + escapeHtml(item.title) + '</h3>',
+      '    <div class="compact-meta">',
+      '      <span>' + escapeHtml(item.kid) + '</span>',
+      item.date ? '<span>' + escapeHtml(item.dateLabel) + (item.allDay ? '' : ' · ' + escapeHtml(item.time)) + '</span>' : '',
+      deadline,
+      '    </div>',
+      '  </div>',
+      '</article>'
+    ].join("");
+  }
+
+  function renderSectionSummary(items) {
+    var action = items.filter(function (i) { return i.actionRequired; }).length;
+    var review = items.filter(function (i) { return i.reviewStatus === "needs_review"; }).length;
+    var calRisk = items.filter(function (i) {
+      return i.calStatus === "not_checked" || i.calStatus === "needs_review" || i.calStatus === "not_on_calendar";
+    }).length;
+    return [
+      '<div class="section-summary cal-toolbar-counts">',
+      '<span><b>' + items.length + '</b>Items</span>',
+      '<span class="' + (action ? 'count-warn' : '') + '"><b>' + action + '</b>Actions</span>',
+      '<span class="' + (review ? 'count-warn' : '') + '"><b>' + review + '</b>Review</span>',
+      '<span class="' + (calRisk ? 'count-warn' : '') + '"><b>' + calRisk + '</b>Cal risk</span>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderTabHero(model, visibleItems) {
+    var cat = null;
+    for (var ci = 0; ci < VISUAL_CATEGORIES.length; ci++) {
+      if (VISUAL_CATEGORIES[ci].id === state.activeCategory) { cat = VISUAL_CATEGORIES[ci]; break; }
+    }
+    var label = cat ? cat.label : titleCase(state.activeCategory);
+    var dateItems = visibleItems.filter(function (i) { return i.date; });
+    var earliest = dateItems.length ? dateItems[0].dateLabel : null;
+    var latest = dateItems.length ? dateItems[dateItems.length - 1].dateLabel : null;
+    return [
+      '<section class="tab-hero glass-panel">',
+      '  <div class="tab-hero-inner">',
+      '    <p class="eyebrow">' + escapeHtml(label) + ' tab</p>',
+      '    <h1 class="tab-hero-title">' + escapeHtml(label) + '</h1>',
+      earliest ? '<p class="tab-hero-range muted">' + escapeHtml(earliest) + ' → ' + escapeHtml(latest) + '</p>' : '',
+      '  </div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderTabShell(model, visibleItems) {
+    var priorityItems = visibleItems.filter(function (i) { return i.isPriority; });
+    var normalItems = visibleItems.filter(function (i) { return !i.isPriority; });
+    var priorityStrip = priorityItems.length
+      ? '<div class="priority-strip"><p class="eyebrow strip-label">Needs attention · ' + priorityItems.length + ' item(s)</p><div class="compact-grid">' + priorityItems.map(renderCompactItemCard).join("") + '</div></div>'
+      : '';
+    var mainGrid = normalItems.length
+      ? '<div class="compact-grid">' + normalItems.map(renderCompactItemCard).join("") + '</div>'
+      : (!priorityItems.length ? '<div class="empty-state glass-panel"><p class="eyebrow">No matches</p><p class="muted">No items match these filters.</p></div>' : '');
+    return [
+      '<section class="content-grid">',
+      '  <div class="event-column">',
+      renderSectionSummary(visibleItems),
+      priorityStrip,
+      mainGrid,
+      '  </div>',
+      '  <aside class="side-column">',
+      renderCalendarOverview(model),
+      renderSourceLedger(model),
+      '  </aside>',
+      '</section>'
+    ].join("");
+  }
+
+  // ─── Dashboard Notes (localStorage) ──────────────────────────────────────────
+
+  var NOTES_KEY = "familyDesk.auditNotes.v1";
+
+  function localStorageOk() {
+    try { localStorage.setItem("__fd_test__", "1"); localStorage.removeItem("__fd_test__"); return true; }
+    catch (e) { return false; }
+  }
+
+  function getAuditNotes() {
+    try {
+      var raw = localStorage.getItem(NOTES_KEY);
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  }
+
+  function saveAuditNotes(notes) {
+    try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); return true; }
+    catch (e) { return false; }
+  }
+
+  function addAuditNote(noteData) {
+    var notes = getAuditNotes();
+    var note = {
+      id: "note-" + Date.now() + "-" + Math.floor(Math.random() * 10000),
+      section: noteData.section || "general",
+      kid: noteData.kid || "all",
+      type: noteData.type || "observation",
+      title: noteData.title || "",
+      text: noteData.text || "",
+      status: "open",
+      createdAt: new Date().toISOString(),
+      exported: false
+    };
+    notes.unshift(note);
+    saveAuditNotes(notes);
+    return note;
+  }
+
+  function updateAuditNote(id, changes) {
+    var notes = getAuditNotes();
+    for (var i = 0; i < notes.length; i++) {
+      if (notes[i].id === id) {
+        var keys = Object.keys(changes);
+        for (var k = 0; k < keys.length; k++) { notes[i][keys[k]] = changes[keys[k]]; }
+        return saveAuditNotes(notes);
+      }
+    }
+    return false;
+  }
+
+  function deleteAuditNote(id) {
+    var filtered = getAuditNotes().filter(function (n) { return n.id !== id; });
+    return saveAuditNotes(filtered);
+  }
+
+  function groupAuditNotesBySection(notes) {
+    var groups = {};
+    notes.forEach(function (note) {
+      var s = note.section || "general";
+      if (!groups[s]) groups[s] = [];
+      groups[s].push(note);
+    });
+    return groups;
+  }
+
+  function buildAuditExportPrompt(notes) {
+    var open = notes.filter(function (n) { return n.status !== "exported"; });
+    if (!open.length) return "No open audit notes to export.";
+    var lines = [
+      "You are helping update a family dashboard data file (dashboard-data.js).",
+      "Below are audit notes from the Family Desk dashboard.",
+      "For each note, update or add the relevant item in dashboard-data.js as described.",
+      "Keep all existing items. Return the full updated dashboard-data.js file.",
+      "The file must define window.DASHBOARD_DATA = { ... } with no imports.",
+      "",
+      "AUDIT NOTES:"
+    ];
+    open.forEach(function (note, i) {
+      lines.push("");
+      lines.push((i + 1) + ". [" + String(note.section).toUpperCase() + "] [" + (note.kid === "all" ? "Family" : note.kid) + "] [" + note.type + "]");
+      if (note.title) lines.push("   Title: " + note.title);
+      lines.push("   Note: " + note.text);
+      lines.push("   Status: " + note.status);
+    });
+    lines.push("", "END OF AUDIT NOTES", "", "Return the complete updated dashboard-data.js file.");
+    return lines.join("\n");
+  }
+
+  // ─── Dashboard Notes renderers ────────────────────────────────────────────────
+
+  function renderDashboardNotesView(model) {
+    var notes = getAuditNotes();
+    var lsOk = localStorageOk();
+    var warningHtml = lsOk ? "" : '<div class="notes-warning">localStorage is unavailable in this browser. Notes will not be saved between sessions.</div>';
+    var exportBar = notes.length
+      ? '<div class="notes-export-bar"><button class="notes-export-btn" data-notes-action="export-prompt">Export Prompt for ChatGPT</button><span class="notes-export-hint">Generates a prompt to paste into ChatGPT → updated dashboard-data.js</span></div>'
+      : '';
+    var exportModal = state.exportPromptText ? renderExportPromptModal(state.exportPromptText) : '';
+    return [
+      '<section class="notes-view">',
+      renderNotesAddForm(model),
+      '<div class="notes-main">',
+      warningHtml,
+      renderNotesList(notes),
+      '</div>',
+      exportBar,
+      exportModal,
+      '</section>'
+    ].join("");
+  }
+
+  function renderNotesAddForm(model) {
+    var kids = (model.kids || []).filter(function (k) { return k.active !== false; });
+    var kidOptions = kids.map(function (k) {
+      return '<option value="' + escapeHtml(k.id) + '">' + escapeHtml(k.label) + '</option>';
+    }).join("");
+    return [
+      '<form class="notes-form glass-panel" data-notes-form="add">',
+      '  <p class="eyebrow">Dashboard notes</p>',
+      '  <h2>Add audit note</h2>',
+      '  <div class="notes-form-grid">',
+      '    <label class="notes-label">Section<select name="section" class="notes-select">',
+      '      <option value="general">General</option>',
+      '      <option value="school">School</option>',
+      '      <option value="dance">Dance</option>',
+      '      <option value="theater">Theater</option>',
+      '      <option value="sports">Sports</option>',
+      '      <option value="family">Family</option>',
+      '      <option value="calendar">Calendar</option>',
+      '    </select></label>',
+      '    <label class="notes-label">Kid<select name="kid" class="notes-select">' + kidOptions + '</select></label>',
+      '    <label class="notes-label">Type<select name="type" class="notes-select">',
+      '      <option value="observation">Observation</option>',
+      '      <option value="reminder">Reminder</option>',
+      '      <option value="question">Question</option>',
+      '      <option value="action">Action</option>',
+      '      <option value="export-ready">Export ready</option>',
+      '    </select></label>',
+      '    <label class="notes-label notes-label--wide">Note title<input type="text" name="title" class="notes-input" placeholder="Short title (optional)" /></label>',
+      '    <label class="notes-label notes-label--full">Note text<textarea name="text" class="notes-textarea" placeholder="What needs to be updated, checked, or remembered?" rows="3"></textarea></label>',
+      '  </div>',
+      '  <button type="submit" class="notes-submit">Save Note</button>',
+      '</form>'
+    ].join("");
+  }
+
+  function renderNotesList(notes) {
+    if (!notes.length) {
+      return '<div class="notes-empty glass-panel"><p class="eyebrow">No notes yet</p><p class="muted">Use the form above to add audit notes. Notes are saved in your browser only.</p></div>';
+    }
+    var groups = groupAuditNotesBySection(notes);
+    return Object.keys(groups).map(function (section) {
+      return [
+        '<div class="notes-section">',
+        '<h3 class="notes-section-title">' + escapeHtml(titleCase(section)) + ' <span class="notes-count">' + groups[section].length + '</span></h3>',
+        groups[section].map(renderNoteCard).join(""),
+        '</div>'
+      ].join("");
+    }).join("");
+  }
+
+  function renderNoteCard(note) {
+    var typeAccent = { reminder: "amber", question: "sky", action: "rose", observation: "mint", "export-ready": "gold" };
+    var accent = typeAccent[note.type] || "slate";
+    var exportedCls = note.exported ? " note-card--exported" : "";
+    var doneCls = note.status === "done" ? " note-card--done" : "";
+    var safeId = escapeHtml(note.id);
+    return [
+      '<div class="note-card glass-panel accent-' + escapeHtml(accent) + exportedCls + doneCls + '">',
+      '  <div class="note-card-rail"><span></span></div>',
+      '  <div class="note-card-body">',
+      '    <div class="note-card-hd">',
+      '      <span class="category-pill">' + escapeHtml(note.type) + '</span>',
+      '      <span class="note-kid">' + escapeHtml(note.kid === "all" ? "Family" : note.kid) + '</span>',
+      '      <span class="note-date">' + escapeHtml(new Date(note.createdAt).toLocaleDateString()) + '</span>',
+      note.exported ? '<span class="badge">Exported</span>' : '',
+      note.status === "done" ? '<span class="badge">Done</span>' : '',
+      '    </div>',
+      note.title ? '<p class="note-title">' + escapeHtml(note.title) + '</p>' : '',
+      '    <p class="note-text">' + escapeHtml(note.text) + '</p>',
+      '    <div class="note-actions">',
+      note.status !== "done"
+        ? '<button class="note-btn" data-notes-action="mark-done" data-note-id="' + safeId + '">Mark done</button>'
+        : '<button class="note-btn" data-notes-action="mark-open" data-note-id="' + safeId + '">Reopen</button>',
+      '<button class="note-btn note-btn--export" data-notes-action="mark-exported" data-note-id="' + safeId + '">Mark exported</button>',
+      '<button class="note-btn note-btn--delete" data-notes-action="delete" data-note-id="' + safeId + '">Delete</button>',
+      '    </div>',
+      '  </div>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderExportPromptModal(promptText) {
+    return [
+      '<div class="notes-modal-backdrop" data-close-export-modal="true">',
+      '  <section class="notes-modal glass-panel" role="dialog" aria-modal="true" onclick="event.stopPropagation()">',
+      '    <button class="close-overlay" data-close-export-modal="true" aria-label="Close">×</button>',
+      '    <p class="eyebrow">Export prompt</p>',
+      '    <h2>Copy this prompt for ChatGPT</h2>',
+      '    <p class="muted">Paste into ChatGPT → it returns an updated dashboard-data.js.</p>',
+      '    <textarea class="notes-export-textarea" readonly rows="14">' + escapeHtml(promptText) + '</textarea>',
+      '    <button class="notes-submit" data-notes-copy-prompt="true">Copy to clipboard</button>',
+      '  </section>',
+      '</div>'
+    ].join("");
+  }
+
   // ─── Event delegation ─────────────────────────────────────────────────────────
 
   function attachEvents(model) {
@@ -866,6 +1167,7 @@
       button.addEventListener("click", function () {
         state.activeCategory = button.getAttribute("data-category");
         state.selectedItemId = null;
+        state.exportPromptText = null;
         renderDashboard(model);
       });
     });
@@ -917,11 +1219,78 @@
       });
     });
 
-    // Calendar day selection — stopPropagation from child data-open-item buttons is already set above
+    // Calendar day selection — stopPropagation from child data-open-item buttons is set above
     Array.prototype.forEach.call(root.querySelectorAll("[data-cal-date]"), function (button) {
       button.addEventListener("click", function () {
         var key = button.getAttribute("data-cal-date");
         state.selectedDate = state.selectedDate === key ? null : key;
+        renderDashboard(model);
+      });
+    });
+
+    // Notes form submit
+    var notesForm = root.querySelector("[data-notes-form='add']");
+    if (notesForm) {
+      notesForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var fd = new FormData(notesForm);
+        var text = (fd.get("text") || "").toString().trim();
+        if (!text) return;
+        addAuditNote({
+          section: (fd.get("section") || "general").toString(),
+          kid: (fd.get("kid") || "all").toString(),
+          type: (fd.get("type") || "observation").toString(),
+          title: (fd.get("title") || "").toString().trim(),
+          text: text
+        });
+        renderDashboard(model);
+      });
+    }
+
+    // Notes action buttons (mark-done, mark-open, mark-exported, delete, export-prompt)
+    Array.prototype.forEach.call(root.querySelectorAll("[data-notes-action]"), function (button) {
+      button.addEventListener("click", function (event) {
+        event.stopPropagation();
+        var action = button.getAttribute("data-notes-action");
+        var noteId = button.getAttribute("data-note-id");
+        if (action === "delete" && noteId) {
+          deleteAuditNote(noteId);
+          renderDashboard(model);
+        } else if (action === "mark-done" && noteId) {
+          updateAuditNote(noteId, { status: "done" });
+          renderDashboard(model);
+        } else if (action === "mark-open" && noteId) {
+          updateAuditNote(noteId, { status: "open", exported: false });
+          renderDashboard(model);
+        } else if (action === "mark-exported" && noteId) {
+          updateAuditNote(noteId, { exported: true, status: "exported" });
+          renderDashboard(model);
+        } else if (action === "export-prompt") {
+          state.exportPromptText = buildAuditExportPrompt(getAuditNotes());
+          renderDashboard(model);
+        }
+      });
+    });
+
+    // Copy prompt button inside export modal
+    var copyBtn = root.querySelector("[data-notes-copy-prompt]");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function (event) {
+        event.stopPropagation();
+        var text = state.exportPromptText || "";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function () {});
+        }
+        copyBtn.textContent = "Copied!";
+        setTimeout(function () { if (copyBtn.parentNode) copyBtn.textContent = "Copy to clipboard"; }, 2200);
+      });
+    }
+
+    // Export modal close (backdrop click or × button)
+    Array.prototype.forEach.call(root.querySelectorAll("[data-close-export-modal]"), function (el) {
+      el.addEventListener("click", function (event) {
+        if (el.tagName !== "BUTTON" && event.target !== el) return;
+        state.exportPromptText = null;
         renderDashboard(model);
       });
     });
@@ -930,6 +1299,7 @@
   // ─── Main render entry ────────────────────────────────────────────────────────
 
   function renderDashboard(model) {
+    currentModel = model;
     if (model.error) {
       renderDataProblem(model);
       return;
@@ -949,15 +1319,37 @@
       return;
     }
 
-    root.innerHTML = [
-      '<main class="family-desk">',
-      renderTopNav(model),
-      renderHero(model, visibleItems),
-      renderTodayBrief(model),
-      renderTimeline(model, visibleItems),
-      renderOverlay(model),
-      '</main>'
-    ].join("");
+    if (state.activeCategory === "dashboard-notes") {
+      root.innerHTML = [
+        '<main class="family-desk">',
+        renderTopNav(model),
+        renderDashboardNotesView(model),
+        '</main>'
+      ].join("");
+      attachEvents(model);
+      return;
+    }
+
+    if (state.activeCategory === "all") {
+      root.innerHTML = [
+        '<main class="family-desk">',
+        renderTopNav(model),
+        renderHero(model, visibleItems),
+        renderTodayBrief(model),
+        renderTabShell(model, visibleItems),
+        renderOverlay(model),
+        '</main>'
+      ].join("");
+    } else {
+      root.innerHTML = [
+        '<main class="family-desk">',
+        renderTopNav(model),
+        renderTabHero(model, visibleItems),
+        renderTabShell(model, visibleItems),
+        renderOverlay(model),
+        '</main>'
+      ].join("");
+    }
     attachEvents(model);
   }
 
