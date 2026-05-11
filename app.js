@@ -425,7 +425,9 @@
       renderPrepList(item),
       '    <div class="card-links">',
       item.link ? '<a href="' + escapeHtml(item.link) + '" target="_blank" rel="noopener">Open source</a>' : '<span>Source link not listed</span>',
-      item.calendarHref ? '<a href="' + escapeHtml(item.calendarHref) + '" target="_blank" rel="noopener">Add to calendar</a>' : '<span>Add-to-calendar unavailable</span>',
+      item.calStatus === "on_calendar"
+        ? (item.link ? '<a href="' + escapeHtml(item.link) + '" target="_blank" rel="noopener">Open calendar event</a>' : '<span class="muted">Already on calendar</span>')
+        : (item.calendarHref ? '<a href="' + escapeHtml(item.calendarHref) + '" target="_blank" rel="noopener">Add to calendar</a>' : '<span>Add-to-calendar unavailable</span>'),
       '    </div>',
       '  </div>',
       '</article>'
