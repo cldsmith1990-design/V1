@@ -93,6 +93,19 @@
     return { ok: true };
   }
 
+  function getFilteredItems(model) {
+    return model.items.filter(function (it) {
+      if (state.activeKid !== 'all') {
+        var ids = it.childIds || [];
+        if (!ids.some(function (id) { return id === state.activeKid; })) return false;
+      }
+      if (state.activeCategory !== 'all') {
+        if (it.category !== state.activeCategory) return false;
+      }
+      return true;
+    });
+  }
+
   function buildModel(raw) {
     var model = { meta: raw.meta || {}, children: raw.children || [], categories: raw.categories || [], items: [] };
     (raw.items || []).forEach(function (it, idx) {
@@ -158,18 +171,20 @@
       kids.map(function (k) {
         return '<button class="nav-pill kid-' + escapeHtml(k.colorKey || 'gold') + '" data-kid="' + escapeHtml(k.id) + '" aria-pressed="' + (state.activeKid === k.id) + '">' + escapeHtml(k.displayName) + '</button>';
       }).join('\n');
-    var catHtml = (model.categories || []).filter(function(c){return c.visible !== false}).map(function (c){
-      return '<button class="chip" data-cat="' + escapeHtml(c.id) + '" aria-pressed="' + (state.activeCategory === c.id) + '">' + escapeHtml(c.label) + '</button>';
-    }).join('\n');
+    var catHtml = '<button class="chip" data-cat="all" aria-pressed="' + (state.activeCategory === 'all') + '">All</button>' +
+      (model.categories || []).filter(function(c){return c.visible !== false}).map(function (c){
+        return '<button class="chip" data-cat="' + escapeHtml(c.id) + '" aria-pressed="' + (state.activeCategory === c.id) + '">' + escapeHtml(c.label) + '</button>';
+      }).join('\n');
 
     container.innerHTML = '\n      <header class="top-nav glass-panel" role="navigation" aria-label="Top navigation">\n        <a class="brand-mark" href="#" aria-label="Family Desk home"><span>FD</span><strong>Family Desk</strong></a>\n        <nav class="kid-filter" aria-label="Kid filter">' + kidHtml + '</nav>\n        <nav class="category-filter" aria-label="Category filter">' + catHtml + '</nav>\n      </header>\n    ';
   }
 
   function renderHero(model, container) {
     var today = todayKey();
-    var todayItems = model.items.filter(function(it){ return it._dateKey === today; });
-    var upcoming = model.items.filter(function(it){ return it._dateKey && it._dateKey >= today; }).slice(0,8);
-    var html = '\n      <section class="hero-grid">\n        <article class="glass-panel hero-copy">\n          <p class="eyebrow">Family Dashboard</p>\n          <h1>Today</h1>\n          <p class="deck">Quick view of what matters today. Replace <strong>dashboard-data.js</strong> and refresh to update the desk.</p>\n          <div class="hero-metrics">\n            <span><b>' + escapeHtml(String(todayItems.length)) + '</b> Today items</span>\n            <span><b>' + escapeHtml(String(upcoming.length)) + '</b> Upcoming</span>\n            <span><b>' + escapeHtml(String(model.items.filter(function(i){return i.priority==='urgent';}).length)) + '</b> Urgent</span>\n            <span><b>' + escapeHtml(String(model.items.length)) + '</b> Total</span>\n          </div>\n        </article>\n        <aside class="forward-card glass-panel">\n          <p class="eyebrow">Forward look</p>\n          <h2>Upcoming</h2>\n          <div class="mini-meta">' + upcoming.map(function(it){
+    var filtered = getFilteredItems(model);
+    var todayItems = filtered.filter(function(it){ return it._dateKey === today; });
+    var upcoming = filtered.filter(function(it){ return it._dateKey && it._dateKey >= today; }).slice(0,8);
+    var html = '\n      <section class="hero-grid">\n        <article class="glass-panel hero-copy">\n          <p class="eyebrow">Family Dashboard</p>\n          <h1>Today</h1>\n          <p class="deck">Quick view of what matters today. Replace <strong>dashboard-data.js</strong> and refresh to update the desk.</p>\n          <div class="hero-metrics">\n            <span><b>' + escapeHtml(String(todayItems.length)) + '</b> Today items</span>\n            <span><b>' + escapeHtml(String(upcoming.length)) + '</b> Upcoming</span>\n            <span><b>' + escapeHtml(String(filtered.filter(function(i){return i.priority==='urgent';}).length)) + '</b> Urgent</span>\n            <span><b>' + escapeHtml(String(filtered.length)) + '</b> Total</span>\n          </div>\n        </article>\n        <aside class="forward-card glass-panel">\n          <p class="eyebrow">Forward look</p>\n          <h2>Upcoming</h2>\n          <div class="mini-meta">' + upcoming.map(function(it){
             return '<button class="mini-card" data-open-item="' + escapeHtml(it.id) + '"><span>' + escapeHtml(it.startTime || '') + '</span><strong>' + escapeHtml(it.title) + '</strong><em>' + escapeHtml(it._dateKey || 'TBD') + '</em></button>';
           }).join('\n') + '</div>\n        </aside>\n      </section>\n    ';
     container.innerHTML = html;
@@ -177,8 +192,9 @@
 
   function renderMain(model, container) {
     var today = todayKey();
+    var filtered = getFilteredItems(model);
     var byDate = {};
-    model.items.forEach(function (it) {
+    filtered.forEach(function (it) {
       var k = it._dateKey || 'unscheduled';
       byDate[k] = byDate[k] || [];
       byDate[k].push(it);
@@ -192,7 +208,7 @@
       });
     });
     html += '</div>\n  <aside class="side-column">\n    <section class="glass-panel today-brief">\n      <h2>Today</h2>\n      <div id="today-list">';
-    var todayItems = model.items.filter(function(it){ return it._dateKey === today; });
+    var todayItems = filtered.filter(function(it){ return it._dateKey === today; });
     if (!todayItems.length) html += '<p class="muted">No items for today.</p>';
     todayItems.forEach(function(it){
       html += '<div class="calendar-row"><strong>' + escapeHtml(it.title) + '</strong><div>' + escapeHtml(it.startTime || '') + ' ' + escapeHtml(it.location && it.location.name || '') + '</div></div>';
@@ -251,7 +267,7 @@
     });
   }
 
-  function attachEvents(model) {
+  function attachEvents(model, heroWrap, mainWrap) {
     // click/open handlers
     document.body.addEventListener('click', function (e) {
       var open = e.target.closest('[data-open-item]');
@@ -266,10 +282,10 @@
       if (pill && pill.hasAttribute('data-kid')) {
         var kid = pill.getAttribute('data-kid');
         state.activeKid = kid;
-        // update aria-pressed on all pills
         Array.prototype.forEach.call(document.querySelectorAll('.nav-pill'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-kid') === state.activeKid); });
         announce('Filtered to ' + (kid === 'all' ? 'Family' : kid));
-        // no re-rendering here: this simplified app does not filter server-side
+        renderHero(model, heroWrap);
+        renderMain(model, mainWrap);
       }
 
       var chip = e.target.closest('.chip');
@@ -277,7 +293,9 @@
         var cat = chip.getAttribute('data-cat');
         state.activeCategory = cat;
         Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', c.getAttribute('data-cat') === state.activeCategory); });
-        announce('Showing ' + cat + ' items');
+        announce('Showing ' + (cat === 'all' ? 'all' : cat) + ' items');
+        renderHero(model, heroWrap);
+        renderMain(model, mainWrap);
       }
     });
 
@@ -345,7 +363,7 @@
     // ensure live region exists
     ensureLiveRegion();
 
-    attachEvents(model);
+    attachEvents(model, heroWrap, mainWrap);
     announce('Dashboard loaded');
     log('Rendered model with', model.items.length, 'items');
   }
