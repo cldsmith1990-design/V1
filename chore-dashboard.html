@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Kids Chore Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="background-orbs" aria-hidden="true">
+    <span class="orb orb-one"></span>
+    <span class="orb orb-two"></span>
+    <span class="orb orb-three"></span>
+  </div>
+
+  <header class="topbar glass-panel">
+    <a class="brand" href="#main-content" aria-label="Kids Chore Dashboard home">
+      <span class="brand-icon" aria-hidden="true">✓</span>
+      <span>
+        <span class="eyebrow">Local-first family tracker</span>
+        <strong>Kids Chore Dashboard</strong>
+      </span>
+    </a>
+
+    <nav class="nav-actions" aria-label="Dashboard controls">
+      <button type="button" class="button ghost" id="printButton">Print</button>
+      <button type="button" class="button ghost" id="exportButton">Export Markdown</button>
+      <button type="button" class="button ghost" id="syncButton">Airtable Sync</button>
+      <button type="button" class="button ghost" id="resetSeedButton">Reset Seed</button>
+      <button type="button" class="button primary" id="payoutButton">Process Payout</button>
+    </nav>
+  </header>
+
+  <main id="main-content" class="shell" tabindex="-1">
+    <section class="hero glass-panel" aria-labelledby="dashboard-title">
+      <div>
+        <p class="eyebrow">Weekly allowance schedule</p>
+        <h1 id="dashboard-title">Plan, tap, fix, and pay the week.</h1>
+        <p class="hero-copy">Track chores by kid, day, and time of day. Tap a chore to cycle Not Done → Done → Fix Needed, save parent notes, and keep the whole week in local browser storage.</p>
+        <div class="legend" aria-label="Status legend">
+          <span><i class="status-dot status-not-done" aria-hidden="true"></i>Not Done</span>
+          <span><i class="status-dot status-done" aria-hidden="true"></i>Done</span>
+          <span><i class="status-dot status-fix-needed" aria-hidden="true"></i>Fix Needed</span>
+        </div>
+      </div>
+
+      <aside class="earnings-card" aria-label="Combined weekly earnings summary">
+        <span class="eyebrow">Combined Weekly Earnings</span>
+        <strong id="totalEarnings">$0.00</strong>
+        <span id="targetSummary">$0.00 of weekly target</span>
+        <div class="progress-track" aria-hidden="true"><span id="combinedProgress"></span></div>
+      </aside>
+    </section>
+
+    <section class="dashboard-grid" id="childrenDashboards" aria-live="polite"></section>
+  </main>
+
+  <div class="sr-only" id="statusMessage" role="status" aria-live="polite"></div>
+
+  <script src="chore-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
