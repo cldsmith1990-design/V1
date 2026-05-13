@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Kids Chore Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="background-orbs" aria-hidden="true">
+    <span class="orb orb-one"></span>
+    <span class="orb orb-two"></span>
+    <span class="orb orb-three"></span>
+  </div>
+
+  <header class="topbar glass-panel">
+    <a class="brand" href="#main-content" aria-label="Kids Chore Dashboard home">
+      <span class="brand-icon" aria-hidden="true">★</span>
+      <span>
+        <span class="eyebrow">Local-first family tracker</span>
+        <strong>Kids Chore Dashboard</strong>
+      </span>
+    </a>
+
+    <nav class="nav-actions" aria-label="Dashboard controls">
+      <button type="button" class="button ghost" id="resetSeedButton">Reset Seed</button>
+      <button type="button" class="button primary" id="payoutButton">Process End-of-Week Payout</button>
+    </nav>
+  </header>
+
+  <main id="main-content" class="shell" tabindex="-1">
+    <section class="hero glass-panel" aria-labelledby="dashboard-title">
+      <div>
+        <p class="eyebrow">Allowance pipeline</p>
+        <h1 id="dashboard-title">Move chores from done to parent-approved.</h1>
+        <p class="hero-copy">Kids mark finished tasks, parents approve or reject them, and the dashboard calculates approved weekly allowance totals from local browser storage.</p>
+      </div>
+
+      <aside class="earnings-card" aria-label="Weekly earnings summary">
+        <span class="eyebrow">Weekly Earnings</span>
+        <strong id="totalEarnings">$0.00</strong>
+        <span id="approvedCount">0 approved chores</span>
+      </aside>
+    </section>
+
+    <section class="dashboard-grid" id="childrenDashboards" aria-live="polite"></section>
+  </main>
+
+  <div class="sr-only" id="statusMessage" role="status" aria-live="polite"></div>
+
+  <script src="chore-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
