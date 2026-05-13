@@ -53,3 +53,9 @@ dashboards/chore-allowance/
 
 This is the organized dashboard-folder version of the existing Kids Chore Dashboard.
 The original root-level files were left untouched for safety.
+
+```text
+dashboards/smart-goal-command/
+```
+
+This is the standalone 2026 SMART Goal Command Dashboard for Douglas Smith's IT goals, ELT evidence readiness, and local-first progress tracking.
