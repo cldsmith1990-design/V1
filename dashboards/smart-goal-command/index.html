@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>2026 SMART Goal Command Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true">
+    <span></span><span></span><span></span><span></span>
+  </div>
+
+  <header class="topbar glass">
+    <a class="brand" href="#main" aria-label="Go to dashboard overview">
+      <span class="brand-mark" aria-hidden="true">◎</span>
+      <span>
+        <span class="eyebrow" id="orgName">Beginnings Credit Union | IT</span>
+        <strong>2026 SMART Goal Command</strong>
+      </span>
+    </a>
+    <nav class="toolbar" aria-label="Dashboard actions">
+      <button type="button" class="button ghost" id="resetButton">Reset</button>
+      <button type="button" class="button ghost" id="printButton">Print</button>
+      <button type="button" class="button primary" id="exportButton">Export ELT Report</button>
+    </nav>
+  </header>
+
+  <main id="main" class="shell" tabindex="-1">
+    <section class="hero glass" aria-labelledby="pageTitle">
+      <div class="hero-copy">
+        <span class="eyebrow">Employee performance cockpit</span>
+        <h1 id="pageTitle">Make every SMART goal measurable, auditable, and ready for ELT.</h1>
+        <p id="heroMeta">Douglas Smith • Supervisor: Gavin Metcalf • Last audited May 13, 2026</p>
+      </div>
+      <aside class="score-ring" aria-label="Overall progress">
+        <div class="ring" id="overallRing" style="--score: 0%">
+          <span id="overallScore">0%</span>
+        </div>
+        <p>Weighted progress</p>
+      </aside>
+    </section>
+
+    <section class="kpi-grid" aria-label="Dashboard summary">
+      <article class="kpi glass"><span>Total Weight</span><strong id="totalWeight">100%</strong><small>SMART portfolio</small></article>
+      <article class="kpi glass"><span>Evidence Ready</span><strong id="evidenceScore">0%</strong><small id="evidenceCount">0 of 0 items</small></article>
+      <article class="kpi glass"><span>Open Actions</span><strong id="openActions">0</strong><small>Need owner follow-up</small></article>
+      <article class="kpi glass"><span>Ticket Average</span><strong id="ticketAverage">0</strong><small>Target 130/mo</small></article>
+    </section>
+
+    <nav class="tabs glass" aria-label="Goal sections" id="tabs"></nav>
+
+    <section id="overviewPane" class="pane active" aria-labelledby="overviewHeading">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Overview</span>
+          <h2 id="overviewHeading">Command dashboard</h2>
+        </div>
+        <p>Click any goal card for the detailed tracker, evidence checklist, and next-best actions.</p>
+      </div>
+      <div class="bento" id="goalCards"></div>
+    </section>
+
+    <section id="detailPane" class="pane" aria-live="polite"></section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
