@@ -59,3 +59,10 @@ dashboards/smart-goal-command/
 ```
 
 This is the standalone 2026 SMART Goal Command Dashboard for Douglas Smith's IT goals, ELT evidence readiness, and local-first progress tracking.
+
+
+```text
+dashboards/ultra-architect/
+```
+
+This is the standalone Ultra Architect Logic Compiler dashboard for composing, connecting, simulating, saving, and copying liquid-glass prompt architecture blocks.
