@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>V1 Hub — Three tools. One place.</title>
+<meta name="description" content="A hub for the SMART Goal Command, Chore Dashboard, and Homework apps." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #070912;
+  --bg-elev: #0d1122;
+  --panel: rgba(255,255,255,0.05);
+  --panel-strong: rgba(255,255,255,0.08);
+  --line: rgba(255,255,255,0.10);
+  --line-strong: rgba(255,255,255,0.18);
+  --text: #f4f7ff;
+  --muted: #98a2b9;
+  --subtle: #6b7591;
+  --sky: #38bdf8;
+  --green: #7dffb2;
+  --gold: #d4af37;
+  --violet: #b69cff;
+  --rose: #fb7185;
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { min-height: 100%; background: var(--bg); }
+body {
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(56,189,248,0.18), transparent 38rem),
+    radial-gradient(circle at 90% 10%, rgba(182,156,255,0.16), transparent 38rem),
+    radial-gradient(circle at 50% 100%, rgba(125,255,178,0.12), transparent 42rem),
+    var(--bg);
+  overflow-x: hidden;
+  font-feature-settings: "ss01" on, "cv11" on;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Floating orbs */
+.bg-orbs { position: fixed; inset: 0; pointer-events: none; z-index: -1; overflow: hidden; }
+.orb {
+  position: absolute;
+  width: 28rem; height: 28rem;
+  border-radius: 999px;
+  filter: blur(70px);
+  opacity: 0.35;
+  animation: drift 18s ease-in-out infinite;
+}
+.orb-1 { top: -6rem; left: -8rem; background: var(--sky); }
+.orb-2 { top: 22rem; right: -10rem; background: var(--violet); animation-delay: -6s; }
+.orb-3 { bottom: -10rem; left: 30%; background: var(--green); animation-delay: -12s; }
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(2rem, -2rem) scale(1.08); }
+}
+
+/* Grid overlay */
+.grid-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 70%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 70%);
+}
+
+/* Layout */
+.shell {
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  margin-bottom: 2.5rem;
+}
+.brand { display: inline-flex; align-items: center; gap: 0.8rem; color: var(--text); text-decoration: none; }
+.brand-mark {
+  width: 2.4rem; height: 2.4rem;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sky), var(--violet));
+  color: #051014; font-weight: 800; font-size: 1.1rem;
+}
+.brand-name { font-size: 1rem; font-weight: 800; letter-spacing: -0.01em; }
+.brand-eyebrow {
+  display: block; font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+}
+.topbar-meta { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+
+/* Hero */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr);
+  gap: 1.25rem;
+  padding: clamp(1.4rem, 3vw, 2.5rem);
+  border: 1px solid var(--line);
+  border-radius: 2rem;
+  background: linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  margin-bottom: 1.75rem;
+}
+.hero-eyebrow {
+  display: inline-block;
+  padding: 0.32rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+.hero h1 {
+  margin: 0 0 0.9rem;
+  font-size: clamp(2.4rem, 6vw, 4.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  font-weight: 800;
+  background: linear-gradient(135deg, #fff 0%, #c8d6f5 60%, #8aa3d6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero p {
+  margin: 0;
+  max-width: 38rem;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.6vw, 1.12rem);
+  line-height: 1.6;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  align-self: stretch;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: rgba(0,0,0,0.22);
+}
+.stat-num {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 0.74rem; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 0.45rem;
+}
+
+/* Bento grid */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+.app-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background: linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  transition: transform 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
+  isolation: isolate;
+}
+.app-card::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 80% 0%, var(--accent), transparent 60%);
+  opacity: 0.10;
+  z-index: -1;
+  transition: opacity 240ms ease;
+}
+.app-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.5), 0 0 0 1px var(--accent), 0 0 60px -10px var(--accent);
+}
+.app-card:hover::before { opacity: 0.22; }
+.app-card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.app-card.size-wide { grid-column: span 4; }
+.app-card.size-tall { grid-column: span 2; }
+.app-card.size-med  { grid-column: span 3; }
+
+.app-icon {
+  width: 3rem; height: 3rem;
+  display: grid; place-items: center;
+  border-radius: 0.9rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--line);
+  color: var(--accent);
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.app-card h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.app-eyebrow {
+  display: block;
+  font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+.app-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+  line-height: 1.55;
+}
+
+.app-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.32rem 0.62rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(0,0,0,0.22);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.chip-dot {
+  width: 0.5rem; height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+}
+.chip-muted { color: var(--muted); }
+
+.app-arrow {
+  position: absolute;
+  top: 1.25rem; right: 1.25rem;
+  width: 2.1rem; height: 2.1rem;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  font-size: 0.95rem;
+  transition: transform 240ms ease, background 240ms ease;
+}
+.app-card:hover .app-arrow {
+  transform: translate(2px, -2px) rotate(-45deg);
+  background: var(--accent);
+  color: #0a0d18;
+}
+
+footer.foot {
+  margin-top: 2.5rem;
+  color: var(--subtle);
+  font-size: 0.82rem;
+  text-align: center;
+}
+footer.foot a { color: var(--muted); text-decoration: none; border-bottom: 1px dashed var(--line-strong); }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; }
+  .bento { grid-template-columns: repeat(2, 1fr); }
+  .app-card.size-wide,
+  .app-card.size-tall,
+  .app-card.size-med { grid-column: span 2; }
+}
+@media (max-width: 560px) {
+  .bento { grid-template-columns: 1fr; }
+  .app-card.size-wide,
+  .app-card.size-tall,
+  .app-card.size-med { grid-column: span 1; }
+  .hero-stats { grid-template-columns: 1fr 1fr; }
+  .topbar-meta { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb { animation: none; }
+  .app-card { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="bg-orbs" aria-hidden="true">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div class="grid-overlay" aria-hidden="true"></div>
+
+<main class="shell">
+  <nav class="topbar" aria-label="Primary">
+    <a class="brand" href="./index.html">
+      <span class="brand-mark" aria-hidden="true">V</span>
+      <span>
+        <span class="brand-eyebrow">V1 Hub</span>
+        <span class="brand-name">Personal Command Center</span>
+      </span>
+    </a>
+    <span class="topbar-meta" id="topbarMeta">Loading…</span>
+  </nav>
+
+  <section class="hero" aria-labelledby="heroHeading">
+    <div>
+      <span class="hero-eyebrow">Three tools. One place.</span>
+      <h1 id="heroHeading">Get your week in order.</h1>
+      <p>Track quarterly goals, run the family chore board, and grind through Algebra 2 homework — all in one offline-first toolkit, with your data saved locally to this browser.</p>
+    </div>
+    <div class="hero-stats" aria-label="Combined live stats">
+      <div class="stat">
+        <span class="stat-num" id="statGoals">—</span>
+        <span class="stat-label">Goals tracked</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num" id="statApproved">—</span>
+        <span class="stat-label">Chores done</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num" id="statEarnings">—</span>
+        <span class="stat-label">Earned this week</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num" id="statHomework">—</span>
+        <span class="stat-label">Problems correct</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="bento" aria-label="Apps">
+    <a class="app-card size-wide" href="dashboards/smart-goal-command/index.html" style="--accent:#38bdf8" id="card-smart">
+      <span class="app-arrow" aria-hidden="true">↗</span>
+      <div class="app-icon">◎</div>
+      <div>
+        <span class="app-eyebrow">SMART Goal Command</span>
+        <h2>Quarterly objectives, scored.</h2>
+      </div>
+      <p class="app-desc">Weighted SMART goals, evidence checklists, and a monthly ticket scorecard ready for your ELT review.</p>
+      <div class="app-meta" id="meta-smart">
+        <span class="chip"><span class="chip-dot"></span><span id="smart-progress">—</span></span>
+        <span class="chip chip-muted" id="smart-evidence">—</span>
+      </div>
+    </a>
+
+    <a class="app-card size-med" href="chore-dashboard.html" style="--accent:#7dffb2" id="card-chore">
+      <span class="app-arrow" aria-hidden="true">↗</span>
+      <div class="app-icon">★</div>
+      <div>
+        <span class="app-eyebrow">Chore Dashboard</span>
+        <h2>Family allowance kanban.</h2>
+      </div>
+      <p class="app-desc">A kid-friendly board for chores, parent approvals, and weekly payouts.</p>
+      <div class="app-meta" id="meta-chore">
+        <span class="chip"><span class="chip-dot"></span><span id="chore-approved">—</span></span>
+        <span class="chip chip-muted" id="chore-earnings">—</span>
+      </div>
+    </a>
+
+    <a class="app-card size-med" href="homework.html" style="--accent:#d4af37" id="card-hw">
+      <span class="app-arrow" aria-hidden="true">↗</span>
+      <div class="app-icon">✎</div>
+      <div>
+        <span class="app-eyebrow">Homework</span>
+        <h2>Algebra 2, Chapter 7.</h2>
+      </div>
+      <p class="app-desc">Practice problems with answer checking, hints, and progress tracking.</p>
+      <div class="app-meta" id="meta-hw">
+        <span class="chip"><span class="chip-dot"></span><span id="hw-correct">—</span></span>
+        <span class="chip chip-muted" id="hw-percent">—</span>
+      </div>
+    </a>
+  </section>
+
+  <footer class="foot">
+    <p>All data is stored locally in your browser via <code>localStorage</code>. Nothing leaves this device.</p>
+  </footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var APPS = {
+    smart: { key: "smart_goal_command_dashboard_2026_v2" },
+    chore: { key: "chore_dashboard_state_v1" },
+    hw:    { key: "hw_alg2_ch7_v1" }
+  };
+
+  function safeParse(key) {
+    try {
+      var raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) { return null; }
+  }
+
+  function fmtCurrency(v) {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(v || 0);
+    } catch (e) { return "$" + (v || 0).toFixed(2); }
+  }
+
+  function setText(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  function readSmart() {
+    var data = safeParse(APPS.smart.key);
+    if (!data || !Array.isArray(data.goals)) {
+      setText("statGoals", "0");
+      setText("smart-progress", "Not started");
+      setText("smart-evidence", "No data yet");
+      return 0;
+    }
+    var totalWeight = 0;
+    var weighted = 0;
+    var evDone = 0, evTotal = 0;
+    data.goals.forEach(function (g) {
+      totalWeight += g.weight || 0;
+      var progress = 0;
+      if (Array.isArray(g.months)) {
+        var values = g.months.filter(function (m) { return typeof m.value === "number" && m.value > 0; }).map(function (m) { return m.value; });
+        var avg = values.length ? values.reduce(function (a,b){return a+b;}, 0) / values.length : 0;
+        progress = Math.min(100, (avg / 130) * 100);
+      } else if (Array.isArray(g.items)) {
+        var done = g.items.filter(function (i) { return ["approved", "complete", "active"].indexOf(i.state) !== -1; }).length;
+        var denom = g.targetCount || g.items.length || 1;
+        progress = Math.min(100, (done / denom) * 100);
+      }
+      weighted += progress * (g.weight || 0);
+      if (Array.isArray(g.evidence)) {
+        evTotal += g.evidence.length;
+        evDone += g.evidence.filter(function (e) { return e.done; }).length;
+      }
+    });
+    var overall = totalWeight ? Math.round(weighted / totalWeight) : 0;
+    setText("statGoals", String(data.goals.length));
+    setText("smart-progress", overall + "% overall");
+    setText("smart-evidence", evDone + " / " + evTotal + " evidence");
+    return data.goals.length;
+  }
+
+  function readChore() {
+    var data = safeParse(APPS.chore.key);
+    if (!data || !Array.isArray(data.chores)) {
+      setText("statApproved", "0");
+      setText("statEarnings", "$0");
+      setText("chore-approved", "No data yet");
+      setText("chore-earnings", "Try the seed");
+      return;
+    }
+    var approved = data.chores.filter(function (c) { return c.status === "approved"; });
+    var total = approved.reduce(function (s, c) { return s + Number(c.value || 0); }, 0);
+    setText("statApproved", String(approved.length));
+    setText("statEarnings", fmtCurrency(total));
+    setText("chore-approved", approved.length + " approved");
+    setText("chore-earnings", fmtCurrency(total) + " ready");
+  }
+
+  function readHomework() {
+    var data = safeParse(APPS.hw.key);
+    if (!data || !data.checked) {
+      setText("statHomework", "0");
+      setText("hw-correct", "Not started");
+      setText("hw-percent", "0%");
+      return;
+    }
+    var correct = 0, total = 0;
+    Object.keys(data.checked).forEach(function (k) {
+      total++;
+      if (data.checked[k] === true) correct++;
+    });
+    var pct = total ? Math.round((correct / total) * 100) : 0;
+    setText("statHomework", String(correct));
+    setText("hw-correct", correct + " correct");
+    setText("hw-percent", pct + "% accuracy");
+  }
+
+  function refresh() {
+    readSmart();
+    readChore();
+    readHomework();
+    var now = new Date();
+    var meta = document.getElementById("topbarMeta");
+    if (meta) {
+      meta.textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", refresh);
+  if (document.readyState !== "loading") refresh();
+
+  // Refresh stats when window regains focus (in case user updated data in another tab)
+  window.addEventListener("focus", refresh);
+  window.addEventListener("storage", refresh);
+})();
+</script>
+</body>
+</html>
