@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homework — Algebra II, Ch. 7</title>
+  <link rel="stylesheet" href="homework.css">
+</head>
+<body>
+  <div class="page-bg" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+            <rect x="3" y="2" width="22" height="24" rx="2" fill="#fcf8ef" stroke="#3b2c18" stroke-width="1.4"/>
+            <line x1="8" y1="9" x2="20" y2="9" stroke="#3b2c18" stroke-width="1.1"/>
+            <line x1="8" y1="13" x2="17" y2="13" stroke="#3b2c18" stroke-width="1.1"/>
+            <path d="M8 19 Q11 16 14 19 T20 19" stroke="#1e3a8a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div>
+          <span class="eyebrow">Chapter 7 · Radical Functions</span>
+          <strong class="brand-name">Algebra II Homework</strong>
+        </div>
+      </div>
+      <nav class="topbar-actions" aria-label="Homework controls">
+        <button type="button" class="btn ghost" id="btnReset">Reset Progress</button>
+        <div class="progress-chip" id="progressChip" aria-live="polite">
+          <span id="progressLabel">0 / 0 done</span>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="shell">
+    <!-- Problem set selector -->
+    <section class="hero-band" aria-labelledby="hw-title">
+      <h1 id="hw-title">Chapter 7: Radical Functions &amp; Rational Exponents</h1>
+      <p class="hero-sub">Work through each section, check your answers, and track progress — all offline, saved in your browser.</p>
+
+      <div class="section-tabs" role="tablist" aria-label="Problem sections" id="sectionTabs"></div>
+    </section>
+
+    <!-- Problem list -->
+    <section class="problem-area" id="problemArea" aria-live="polite"></section>
+  </main>
+
+  <div id="toastContainer" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="homework-data.js"></script>
+  <script src="homework-app.js"></script>
+</body>
+</html>
