@@ -193,9 +193,38 @@
     "</article>";
   }
 
+  function renderTicketChart(goal) {
+    var target = 130;
+    var values = goal.months.map(function (m) {
+      return { label: m.label.slice(0, 3), value: m.value, locked: m.locked };
+    });
+    var nums = values.map(function (v) { return v.value || 0; });
+    var maxVal = Math.max.apply(null, [target * 1.2].concat(nums));
+
+    var bars = values.map(function (m) {
+      if (m.locked || m.value === null || m.value === undefined) {
+        return "<div class=\"ticket-bar-col\">" +
+          "<div class=\"ticket-bar bar-future\" style=\"height:4px\"></div>" +
+          "<span class=\"ticket-bar-label\">" + escapeHtml(m.label) + "</span>" +
+        "</div>";
+      }
+      var h = Math.max(4, Math.round((m.value / maxVal) * 64));
+      var cls = m.value >= target ? "ticket-bar" : "ticket-bar bar-below";
+      return "<div class=\"ticket-bar-col\">" +
+        "<span class=\"ticket-bar-value\">" + m.value + "</span>" +
+        "<div class=\"" + cls + "\" style=\"height:" + h + "px\"></div>" +
+        "<span class=\"ticket-bar-label\">" + escapeHtml(m.label) + "</span>" +
+      "</div>";
+    }).join("");
+
+    return "<div class=\"ticket-chart\">" + bars + "</div>";
+  }
+
   function renderTicketTracker(goal) {
     var stats = getTicketAverage(goal);
-    return "<section class=\"detail-grid\"><div class=\"panel\"><div class=\"panel-heading\"><h3>Monthly scorecard</h3><span>Average " + (stats.average ? Math.round(stats.average) : 0) + " / 130</span></div><div class=\"month-grid\">" +
+    return "<section class=\"detail-grid\"><div class=\"panel\"><div class=\"panel-heading\"><h3>Monthly scorecard</h3><span>Average " + (stats.average ? Math.round(stats.average) : 0) + " / 130</span></div>" +
+      renderTicketChart(goal) +
+      "<div class=\"month-grid\">" +
       goal.months.map(function (month) {
         var value = month.value === null || month.value === undefined ? "" : month.value;
         return "<label class=\"month-card " + (month.locked ? "locked" : "") + "\"><span>" + escapeHtml(month.label) + "</span><input type=\"number\" min=\"0\" inputmode=\"numeric\" data-month=\"" + escapeHtml(month.id) + "\" value=\"" + escapeHtml(value) + "\" placeholder=\"0\" " + (month.locked ? "disabled" : "") + "><small>" + escapeHtml(month.evidence) + "</small></label>";
@@ -341,32 +370,47 @@
   }
 
   function exportReport() {
-    var report = {
-      generatedAt: new Date().toISOString(),
-      employee: state.meta.employee,
-      supervisor: state.meta.supervisor,
-      overallProgress: Math.round(getWeightedProgress()),
-      goals: state.goals.map(function (goal) {
-        return {
-          title: goal.title,
-          weight: goal.weight,
-          progress: Math.round(getGoalProgress(goal)),
-          evidenceReady: getGoalEvidenceStats(goal),
-          status: goal.status
-        };
-      })
-    };
+    var rows = [["Goal", "Weight", "Progress%", "EvidenceDone", "EvidenceTotal", "Status"]];
+    state.goals.forEach(function (goal) {
+      var ev = getGoalEvidenceStats(goal);
+      rows.push([
+        goal.title,
+        goal.weight,
+        Math.round(getGoalProgress(goal)),
+        ev.done,
+        ev.total,
+        goal.status
+      ]);
+    });
+    rows.push([]);
+    rows.push(["Overall Progress", Math.round(getWeightedProgress()) + "%"]);
+    rows.push(["Employee", state.meta.employee]);
+    rows.push(["Supervisor", state.meta.supervisor]);
+    rows.push(["Generated", new Date().toISOString()]);
 
-    var blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    var csv = rows.map(function (row) {
+      return row.map(csvCell).join(",");
+    }).join("\n");
+
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     var url = URL.createObjectURL(blob);
     var link = document.createElement("a");
     link.href = url;
-    link.download = "smart-goal-elt-report-2026.json";
+    link.download = "smart-goal-elt-report-2026.csv";
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    showToast("ELT report exported as JSON.");
+    showToast("ELT report exported as CSV.");
+  }
+
+  function csvCell(value) {
+    if (value === null || value === undefined) return "";
+    var str = String(value);
+    if (/[",\n]/.test(str)) {
+      return "\"" + str.replace(/"/g, "\"\"") + "\"";
+    }
+    return str;
   }
 
   function showToast(message) {

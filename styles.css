@@ -437,3 +437,179 @@ h1 {
     flex-direction: column;
   }
 }
+
+/* ── Upgrades ─────────────────────────────────────────────────────── */
+
+/* Per-child earnings ring */
+.child-ring-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+}
+.child-ring-wrap svg {
+  width: 60px;
+  height: 60px;
+  transform: rotate(-90deg);
+}
+.child-ring-track {
+  fill: none;
+  stroke: rgba(255,255,255,0.10);
+  stroke-width: 5;
+}
+.child-ring-bar {
+  fill: none;
+  stroke: var(--child-color, var(--todo));
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 600ms ease;
+  filter: drop-shadow(0 0 6px var(--child-color, var(--todo)));
+}
+.child-ring-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+/* Better child header: 3-column layout */
+.child-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Card transition animations */
+.chore-card {
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.chore-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+}
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-entering {
+  animation: card-enter 280ms ease both;
+}
+
+/* Confetti canvas */
+canvas.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Better empty state */
+.empty-state {
+  min-height: 8rem;
+  border: 1px dashed var(--line-strong);
+  background: rgba(255,255,255,0.02);
+  font-size: 0.92rem;
+  padding: 1rem;
+}
+.empty-state::before {
+  content: "✨";
+  display: block;
+  font-size: 1.8rem;
+  margin-bottom: 0.4rem;
+  opacity: 0.7;
+}
+
+/* Mobile kanban tab bar */
+.kanban-tab-bar {
+  display: none;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem 0;
+  flex-wrap: wrap;
+}
+.kanban-tab {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.05);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+.kanban-tab.active {
+  background: rgba(255,255,255,0.15);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+/* Add-chore button */
+.add-chore-btn {
+  margin-top: 0.4rem;
+  padding: 0.7rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.9rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+.add-chore-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+/* Child dot glow animation */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 18px var(--child-color, var(--todo)); }
+  50%      { box-shadow: 0 0 32px var(--child-color, var(--todo)); }
+}
+.child-dot {
+  animation: pulse-glow 2.6s ease-in-out infinite;
+}
+
+/* Column status dot */
+.column-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+  background: var(--col-color, var(--todo));
+  box-shadow: 0 0 10px var(--col-color, var(--todo));
+}
+
+/* Mobile kanban single-column behaviour */
+@media (max-width: 680px) {
+  .kanban-tab-bar { display: flex; }
+  .kanban {
+    grid-template-columns: 1fr;
+  }
+  .kanban[data-active-col="todo"] .column:not([data-col="todo"]),
+  .kanban[data-active-col="approval"] .column:not([data-col="approval"]),
+  .kanban[data-active-col="approved"] .column:not([data-col="approved"]) {
+    display: none;
+  }
+  .child-header {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "ring name" "total total";
+  }
+  .child-header .child-ring-wrap { grid-area: ring; }
+  .child-header .child-title { grid-area: name; }
+  .child-header .child-total { grid-area: total; }
+}

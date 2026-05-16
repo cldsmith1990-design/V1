@@ -265,6 +265,7 @@
     }
 
     render();
+    if (correct) celebrateIfSectionComplete();
     // Scroll the updated card into view
     setTimeout(function () {
       var card = document.getElementById("problem-" + id);
@@ -304,12 +305,94 @@
     render();
   });
 
+  // ─── Theme toggle ────────────────────────────────────────────────────────────
+
+  function initThemeToggle() {
+    if (document.getElementById("themeToggle")) return;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "theme-toggle";
+    btn.id = "themeToggle";
+    btn.setAttribute("aria-label", "Toggle dark mode");
+    btn.textContent = "☀ Light";
+
+    var saved = null;
+    try { saved = localStorage.getItem("hw_theme"); } catch (e) { /* ignore */ }
+    var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (saved === "dark" || (!saved && prefersDark)) {
+      document.documentElement.setAttribute("data-theme", "dark");
+      btn.textContent = "☾ Dark";
+    } else if (saved === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+      btn.textContent = "☀ Light";
+    }
+
+    btn.addEventListener("click", function () {
+      var cur = document.documentElement.getAttribute("data-theme");
+      var isDark = cur === "dark" || (!cur && prefersDark);
+      var next = isDark ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      btn.textContent = next === "dark" ? "☾ Dark" : "☀ Light";
+      try { localStorage.setItem("hw_theme", next); } catch (e) { /* ignore */ }
+    });
+
+    var actions = document.querySelector(".topbar-actions");
+    if (actions) actions.prepend(btn);
+  }
+
+  // ─── Progress ring ───────────────────────────────────────────────────────────
+
+  function renderProgressRing() {
+    var correct = totalCorrect();
+    var total = totalProblems();
+    var pct = total > 0 ? correct / total : 0;
+    var r = 30, cx = 38, cy = 38, size = 76;
+    var circumference = 2 * Math.PI * r;
+    var dashOffset = circumference * (1 - pct);
+
+    var existing = document.getElementById("progressRingWrap");
+    var html = '<div class="hero-ring-wrap" id="progressRingWrap">' +
+      '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true">' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--parchment-dark)" stroke-width="5"/>' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--blue-deep)" stroke-width="5"' +
+        ' stroke-dasharray="' + circumference.toFixed(1) + '" stroke-dashoffset="' + dashOffset.toFixed(1) + '"' +
+        ' stroke-linecap="round" transform="rotate(-90 ' + cx + ' ' + cy + ')"' +
+        ' style="transition:stroke-dashoffset 0.5s ease"/>' +
+      '</svg>' +
+      '<div>' +
+        '<div class="hero-ring-count">' + correct + '<span style="font-size:16px;font-weight:500;color:var(--ink-muted)">/' + total + '</span></div>' +
+        '<div class="hero-ring-label">problems correct</div>' +
+      '</div>' +
+    '</div>';
+
+    if (existing) {
+      existing.outerHTML = html;
+    } else {
+      var heroSub = document.querySelector(".hero-sub");
+      if (heroSub) heroSub.insertAdjacentHTML("afterend", html);
+    }
+  }
+
+  // ─── Section completion celebration ──────────────────────────────────────────
+
+  function celebrateIfSectionComplete() {
+    var section = data.sections.find(function (s) { return s.id === activeSectionId; });
+    if (!section) return;
+    var allCorrect = section.problems.every(function (p) { return state.checked[p.id] === true; });
+    if (!allCorrect || section.problems.length === 0) return;
+    var activeTab = document.querySelector('.tab-btn.active');
+    if (!activeTab) return;
+    activeTab.classList.add("tab-complete");
+    setTimeout(function () { activeTab.classList.remove("tab-complete"); }, 600);
+  }
+
   // ─── Render orchestrator ─────────────────────────────────────────────────────
 
   function render() {
     renderTabs();
     renderProblems();
     updateProgress();
+    renderProgressRing();
   }
 
   // ─── Escape utilities ─────────────────────────────────────────────────────────
@@ -329,7 +412,11 @@
   // ─── Boot ─────────────────────────────────────────────────────────────────────
 
   state = loadState();
-  document.addEventListener("DOMContentLoaded", render);
-  if (document.readyState !== "loading") render();
+  function boot() {
+    initThemeToggle();
+    render();
+  }
+  document.addEventListener("DOMContentLoaded", boot);
+  if (document.readyState !== "loading") boot();
 
 })();
